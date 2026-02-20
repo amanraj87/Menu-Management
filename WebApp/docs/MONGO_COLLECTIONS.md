@@ -4,6 +4,28 @@ Create these collections in your MongoDB database. Field types below are logical
 
 ---
 
+## Database & collection hierarchy (Services uses this)
+
+The **Services** backend connects to **one database** and uses **four collections** inside it:
+
+```
+<DATABASE>                    ← from MONGO_URI path, or MONGO_DB_NAME env, or default "menu-management"
+├── users                     ← COLLECTIONS.users
+├── menu_items                ← COLLECTIONS.menu_items
+├── selections                ← COLLECTIONS.selections
+└── confirmed_orders          ← COLLECTIONS.confirmed_orders
+```
+
+**How the database name is chosen (Services `src/db.ts`):**
+
+1. If **`MONGO_DB_NAME`** is set in `.env`, that value is used.
+2. Else the first path segment of **`MONGO_URI`** is used (e.g. `mongodb+srv://.../MyDb` → `MyDb`).
+3. Else **`menu-management`** is used.
+
+**Verify in MongoDB Compass:** Connect with the same URI as in Services `.env`, open the database that matches the name above, and confirm the four collections exist. If your data lives in a different database (e.g. "FoodMenu" in Atlas), set **`MONGO_DB_NAME=FoodMenu`** in Services `.env` or put the DB name in the URI path.
+
+---
+
 ## 1. `users`
 
 Stores everyone who can use the app: persons (choose food), admin (see combined + confirm), vendor (update menu).
@@ -107,6 +129,8 @@ Snapshot when admin confirms an order for a given date and meal. Vendor sees the
 | **confirmed_orders** | Admin-confirmed snapshot per date + meal (items, total qty, personBreakdown) |
 
 Backend should expose APIs that read/write these collections. The webapp calls these endpoints (see `src/shared/api/client.ts`). Collection names are exported in the app as `COLLECTIONS` from `src/shared/constants/collections.ts` so your backend can use the same names when querying MongoDB.
+
+**GraphQL implementation:** The repo’s `Services` folder provides a TypeScript + GraphQL API that implements the same operations (see `Services/README.md`). The WebApp is currently REST-based; to use the GraphQL API you can add a REST→GraphQL bridge in Services or switch the WebApp to a GraphQL client.
 
 ---
 

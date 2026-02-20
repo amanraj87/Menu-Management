@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, Tabs, Button, Loader } from '@/shared/ui'
 import type { TabItem } from '@/shared/ui'
-import type { MealType } from '@/shared/types'
-import { api } from '@/shared/api/client'
+import type { MealType, MenuItem } from '@/shared/types'
+import { useMenuItems, useMySelection, usePutSelection } from '@/shared/graphql/hooks'
 import { useToastStore } from '@/shared/stores/toastStore'
 
 const MEALS: { id: MealType; label: string }[] = [
@@ -19,37 +18,19 @@ function toDateString(d: Date) {
 export function PersonChooseMeals() {
   const [date, setDate] = useState(() => toDateString(new Date()))
   const [mealTab, setMealTab] = useState<MealType>('breakfast')
-  const queryClient = useQueryClient()
   const toast = useToastStore()
 
-  const { data: menuData, isLoading: menuLoading } = useQuery({
-    queryKey: ['menu-items', mealTab],
-    queryFn: () => api.getMenuItems(mealTab),
-  })
+  const { items: menuItems, isLoading: menuLoading } = useMenuItems(mealTab)
+  const { selection, isLoading: selectionLoading } = useMySelection(date, mealTab)
+  const { putSelection, isPending: putPending } = usePutSelection(date, mealTab, () => toast.add('Saved.', 'success'), (e) => toast.add(e.message, 'error'))
 
-  const { data: selectionData, isLoading: selectionLoading } = useQuery({
-    queryKey: ['selections', date, mealTab],
-    queryFn: () => api.getMySelections(date, mealTab),
-  })
-
-  const putMutation = useMutation({
-    mutationFn: (items: { menuItemId: string; quantity: number }[]) =>
-      api.putSelection(date, mealTab, items),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['selections', date, mealTab] })
-      toast.add('Saved.', 'success')
-    },
-    onError: (e: Error) => toast.add(e.message, 'error'),
-  })
-
-  const menuItems = menuData?.items ?? []
-  const currentSelection = selectionData?.selection?.items ?? []
+  const currentSelection = selection?.items ?? []
   const selectionByItem = new Map(currentSelection.map((i) => [i.menuItemId, i.quantity]))
 
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   useEffect(() => {
     const next: Record<string, number> = {}
-    menuItems.forEach((item) => {
+    menuItems.forEach((item: MenuItem) => {
       next[item._id] = quantities[item._id] ?? selectionByItem.get(item._id) ?? item.defaultQuantity ?? 1
     })
     setQuantities((prev) => ({ ...prev, ...next }))
@@ -62,12 +43,12 @@ export function PersonChooseMeals() {
 
   const handleSave = () => {
     const items = menuItems
-      .filter((m) => (quantities[m._id] ?? 0) > 0)
-      .map((m) => ({ menuItemId: m._id, quantity: quantities[m._id] ?? 1 }))
-    putMutation.mutate(items)
+      .filter((m: MenuItem) => (quantities[m._id] ?? 0) > 0)
+      .map((m: MenuItem) => ({ menuItemId: m._id, quantity: quantities[m._id] ?? 1 }))
+    putSelection(items)
   }
 
-  const hasSelection = menuItems.some((m) => (quantities[m._id] ?? 0) > 0)
+  const hasSelection = menuItems.some((m: MenuItem) => (quantities[m._id] ?? 0) > 0)
 
   const content = (
     <div>
@@ -88,7 +69,7 @@ export function PersonChooseMeals() {
       ) : (
         <>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {menuItems.map((item) => (
+            {menuItems.map((item: MenuItem) => (
               <li
                 key={item._id}
                 style={{
@@ -114,8 +95,8 @@ export function PersonChooseMeals() {
               </li>
             ))}
           </ul>
-          <Button onClick={handleSave} disabled={!hasSelection || putMutation.isPending} style={{ marginTop: '1rem' }}>
-            {putMutation.isPending ? 'Saving…' : 'Save my choices'}
+          <Button onClick={handleSave} disabled={!hasSelection || putPending} style={{ marginTop: '1rem' }}>
+            {putPending ? 'Saving…' : 'Save my choices'}
           </Button>
         </>
       )}

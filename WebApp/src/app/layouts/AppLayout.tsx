@@ -1,13 +1,8 @@
 import { Outlet } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ApolloProvider } from '@apollo/client/react'
+import { apolloClient } from '@/shared/graphql/client'
 import { Toast } from '@/shared/ui'
 import { useToastStore } from '@/shared/stores/toastStore'
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { staleTime: 60 * 1000 },
-  },
-})
 
 function AppContent() {
   const { toasts, dismiss } = useToastStore()
@@ -21,8 +16,8 @@ function AppContent() {
 
 export function AppLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <ApolloProvider client={apolloClient}>
       <AppContent />
-    </QueryClientProvider>
+    </ApolloProvider>
   )
 }

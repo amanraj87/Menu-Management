@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useNavigate } from 'react-router-dom'
 import { Layout, Sidebar, Header } from '@/shared/ui'
 import { useUIStore } from '@/shared/stores/uiStore'
 import { Button } from '@/shared/ui'
@@ -6,12 +6,16 @@ import { Link } from 'react-router-dom'
 
 const adminNav = [
   { to: '/admin', label: 'Dashboard' },
+  { to: '/admin/users', label: 'Users & vendors' },
   { to: '/admin/orders', label: 'Combined orders' },
   { to: '/admin/history', label: 'Change History' },
 ]
 
 export function AdminLayout() {
   const { sidebarOpen, toggleSidebar } = useUIStore()
+  const setUserSession = useUIStore((s) => s.setUserSession)
+  const navigate = useNavigate()
+  const signOut = () => { setUserSession(null); navigate('/login') }
   return (
     <Layout>
       <Sidebar
@@ -30,6 +34,7 @@ export function AdminLayout() {
               </Button>
               <Link to="/person"><Button variant="outline" size="sm">My meals</Button></Link>
               <Link to="/vendor"><Button variant="outline" size="sm">Vendor</Button></Link>
+              <Button variant="ghost" size="sm" onClick={signOut}>Sign out</Button>
             </>
           }
         />

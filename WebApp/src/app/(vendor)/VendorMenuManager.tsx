@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, Tabs, Table, Thead, Tbody, Tr, Th, Td, Button, Modal, Input, Loader } from '@/shared/ui'
 import type { TabItem } from '@/shared/ui'
 import type { MealType } from '@/shared/types'
 import type { MenuItem } from '@/shared/types'
-import { api } from '@/shared/api/client'
+import { useMenuItems, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem } from '@/shared/graphql/hooks'
 import { useToastStore } from '@/shared/stores/toastStore'
 
 const MEALS: { id: MealType; label: string }[] = [
@@ -22,47 +21,22 @@ export function VendorMenuManager() {
   const [formName, setFormName] = useState('')
   const [formUnit, setFormUnit] = useState('portion')
   const [formDefaultQty, setFormDefaultQty] = useState(1)
-  const queryClient = useQueryClient()
   const toast = useToastStore()
 
-  const { data: menuData, isLoading } = useQuery({
-    queryKey: ['menu-items'],
-    queryFn: () => api.getMenuItems(),
-  })
-
-  const createMutation = useMutation({
-    mutationFn: (body: { name: string; mealType: MealType; unit: string; defaultQuantity?: number }) =>
-      api.createMenuItem({ ...body, mealType: mealTab }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['menu-items'] })
-      setModalOpen(false)
-      resetForm()
-      toast.add('Item added.', 'success')
-    },
-    onError: (e: Error) => toast.add(e.message, 'error'),
-  })
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: { name?: string; unit?: string; defaultQuantity?: number } }) =>
-      api.updateMenuItem(id, body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['menu-items'] })
-      setModalOpen(false)
-      setEditing(null)
-      resetForm()
-      toast.add('Item updated.', 'success')
-    },
-    onError: (e: Error) => toast.add(e.message, 'error'),
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.deleteMenuItem(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['menu-items'] })
-      toast.add('Item removed.', 'success')
-    },
-    onError: (e: Error) => toast.add(e.message, 'error'),
-  })
+  const { items: allItems, isLoading } = useMenuItems()
+  const { createMenuItem, isPending: createPending } = useCreateMenuItem(
+    mealTab,
+    () => { setModalOpen(false); resetForm(); toast.add('Item added.', 'success') },
+    (e) => toast.add(e.message, 'error')
+  )
+  const { updateMenuItem, isPending: updatePending } = useUpdateMenuItem(
+    () => { setModalOpen(false); setEditing(null); resetForm(); toast.add('Item updated.', 'success') },
+    (e) => toast.add(e.message, 'error')
+  )
+  const { deleteMenuItem, isPending: deletePending } = useDeleteMenuItem(
+    () => toast.add('Item removed.', 'success'),
+    (e) => toast.add(e.message, 'error')
+  )
 
   function resetForm() {
     setFormName('')
@@ -88,22 +62,13 @@ export function VendorMenuManager() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (editing) {
-      updateMutation.mutate({
-        id: editing._id,
-        body: { name: formName, unit: formUnit, defaultQuantity: formDefaultQty },
-      })
+      updateMenuItem(editing._id, { name: formName, unit: formUnit, defaultQuantity: formDefaultQty })
     } else {
-      createMutation.mutate({
-        name: formName,
-        mealType: mealTab,
-        unit: formUnit,
-        defaultQuantity: formDefaultQty,
-      })
+      createMenuItem({ name: formName, unit: formUnit, defaultQuantity: formDefaultQty })
     }
   }
 
-  const allItems = menuData?.items ?? []
-  const itemsForMeal = allItems.filter((i) => i.mealType === mealTab)
+  const itemsForMeal = allItems.filter((i: MenuItem) => i.mealType === mealTab)
 
   const tabContent = (
     <>
@@ -122,7 +87,7 @@ export function VendorMenuManager() {
               </Tr>
             </Thead>
             <Tbody>
-              {itemsForMeal.map((row) => (
+              {itemsForMeal.map((row: MenuItem) => (
                 <Tr key={row._id}>
                   <Td>{row.name}</Td>
                   <Td>{row.unit}</Td>
@@ -134,8 +99,8 @@ export function VendorMenuManager() {
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"
-                      onClick={() => deleteMutation.mutate(row._id)}
-                      disabled={deleteMutation.isPending}
+                      onClick={() => deleteMenuItem(row._id)}
+                      disabled={deletePending}
                     >
                       Remove
                     </button>
@@ -187,7 +152,7 @@ export function VendorMenuManager() {
           )}
           <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
             <Button type="button" variant="ghost" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+            <Button type="submit" disabled={createPending || updatePending}>
               {editing ? 'Update' : 'Add'}
             </Button>
           </div>

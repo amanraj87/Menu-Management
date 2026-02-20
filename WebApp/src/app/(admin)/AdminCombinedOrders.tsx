@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, Button, Loader, Table, Thead, Tbody, Tr, Th, Td } from '@/shared/ui'
 import type { MealType } from '@/shared/types'
-import { api } from '@/shared/api/client'
+import { useAggregatedOrder, useConfirmOrder } from '@/shared/graphql/hooks'
 import { useToastStore } from '@/shared/stores/toastStore'
 
 const MEALS: { id: MealType; label: string }[] = [
@@ -18,23 +17,15 @@ function toDateString(d: Date) {
 export function AdminCombinedOrders() {
   const [date, setDate] = useState(() => toDateString(new Date()))
   const [meal, setMeal] = useState<MealType>('lunch')
-  const queryClient = useQueryClient()
   const toast = useToastStore()
 
-  const { data: aggregated, isLoading } = useQuery({
-    queryKey: ['orders-aggregated', date, meal],
-    queryFn: () => api.getAggregatedOrder(date, meal),
-  })
-
-  const confirmMutation = useMutation({
-    mutationFn: () => api.confirmOrder(date, meal),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['orders-aggregated', date, meal] })
-      queryClient.invalidateQueries({ queryKey: ['orders-confirmed'] })
-      toast.add('Order confirmed. Vendor can see it.', 'success')
-    },
-    onError: (e: Error) => toast.add(e.message, 'error'),
-  })
+  const { aggregated, isLoading } = useAggregatedOrder(date, meal)
+  const { confirmOrder, isPending: confirmPending } = useConfirmOrder(
+    date,
+    meal,
+    () => toast.add('Order confirmed. Vendor can see it.', 'success'),
+    (e) => toast.add(e.message, 'error')
+  )
 
   if (isLoading) return <Loader />
 
@@ -100,11 +91,11 @@ export function AdminCombinedOrders() {
             </Tbody>
           </Table>
           <Button
-            onClick={() => confirmMutation.mutate()}
-            disabled={confirmMutation.isPending}
+            onClick={() => confirmOrder()}
+            disabled={confirmPending}
             style={{ marginTop: '1rem' }}
           >
-            {confirmMutation.isPending ? 'Confirming…' : 'Confirm order'}
+            {confirmPending ? 'Confirming…' : 'Confirm order'}
           </Button>
         </>
       )}

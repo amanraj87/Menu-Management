@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useConfirmedOrders } from '@/shared/graphql/hooks'
 import { Card, Loader } from '@/shared/ui'
 import { Link } from 'react-router-dom'
-import { api } from '@/shared/api/client'
+import type { ConfirmedOrder } from '@/shared/types'
 
 function toDateString(d: Date) {
   return d.toISOString().slice(0, 10)
@@ -29,14 +29,10 @@ function MealBlock({ title, items }: { title: string; items: { name: string; qua
 
 export function VendorToday() {
   const today = toDateString(new Date())
-  const { data, isLoading } = useQuery({
-    queryKey: ['orders-confirmed', today],
-    queryFn: () => api.getConfirmedOrders(today),
-  })
+  const { orders, isLoading } = useConfirmedOrders(today)
 
-  const orders = data?.orders ?? []
-  const byMeal = orders.reduce<Record<string, { name: string; quantity: number; unit: string }[]>>((acc, o) => {
-    acc[o.mealType] = o.items.map((i) => ({ name: i.name, quantity: i.quantity, unit: i.unit }))
+  const byMeal = orders.reduce<Record<string, { name: string; quantity: number; unit: string }[]>>((acc: Record<string, { name: string; quantity: number; unit: string }[]>, o: ConfirmedOrder) => {
+    acc[o.mealType] = o.items.map((i: { name: string; quantity: number; unit: string }) => ({ name: i.name, quantity: i.quantity, unit: i.unit }))
     return acc
   }, {})
 

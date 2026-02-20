@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useConfirmedOrders } from '@/shared/graphql/hooks'
 import { Card, Loader } from '@/shared/ui'
 import { Link } from 'react-router-dom'
-import { api } from '@/shared/api/client'
+import type { ConfirmedOrder } from '@/shared/types'
 
 function toDateString(d: Date) {
   return d.toISOString().slice(0, 10)
@@ -9,14 +9,10 @@ function toDateString(d: Date) {
 
 export function VendorTomorrow() {
   const tomorrow = toDateString(new Date(Date.now() + 86400000))
-  const { data, isLoading } = useQuery({
-    queryKey: ['orders-confirmed', tomorrow],
-    queryFn: () => api.getConfirmedOrders(tomorrow),
-  })
+  const { orders, isLoading } = useConfirmedOrders(tomorrow)
 
-  const orders = data?.orders ?? []
-  const flatItems = orders.flatMap((o) =>
-    o.items.map((i) => ({ name: i.name, quantity: i.quantity, unit: i.unit, meal: o.mealType }))
+  const flatItems = orders.flatMap((o: ConfirmedOrder) =>
+    o.items.map((i: { name: string; quantity: number; unit: string }) => ({ name: i.name, quantity: i.quantity, unit: i.unit }))
   )
 
   if (isLoading) return <Loader />
@@ -31,7 +27,7 @@ export function VendorTomorrow() {
           <p style={{ color: 'var(--color-text-muted)' }}>No orders confirmed for tomorrow yet.</p>
         ) : (
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {flatItems.map((item, i) => (
+            {flatItems.map((item: { name: string; quantity: number; unit: string }, i: number) => (
               <li key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid var(--color-border)' }}>
                 <span>{item.name}</span>
                 <span>{item.quantity} {item.unit}</span>

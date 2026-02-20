@@ -4,7 +4,7 @@ interface UIState {
   sidebarOpen: boolean
   selectedDay: string | null
   selectedMeal: string | null
-  userSession: { role: 'admin' | 'vendor'; name?: string } | null
+  userSession: { userId?: string; role?: 'person' | 'admin' | 'vendor'; name?: string } | null
   setSidebarOpen: (open: boolean) => void
   toggleSidebar: () => void
   setSelectedDay: (day: string | null) => void

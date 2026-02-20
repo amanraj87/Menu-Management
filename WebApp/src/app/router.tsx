@@ -7,6 +7,7 @@ import { VendorLayout } from './layouts/VendorLayout'
 import { LoginPage } from '@/app/(auth)/LoginPage'
 import { AdminDashboard } from '@/app/(admin)/AdminDashboard'
 import { AdminCombinedOrders } from '@/app/(admin)/AdminCombinedOrders'
+import { AdminUsers } from '@/app/(admin)/AdminUsers'
 import { ChangeHistory } from '@/app/(admin)/ChangeHistory'
 import { PersonChooseMeals } from '@/app/(person)/PersonChooseMeals'
 import { VendorMenuManager } from '@/app/(vendor)/VendorMenuManager'
@@ -37,6 +38,7 @@ export const router = createBrowserRouter([
         element: <AdminLayout />,
         children: [
           { index: true, element: <AdminDashboard /> },
+          { path: 'users', element: <AdminUsers /> },
           { path: 'orders', element: <AdminCombinedOrders /> },
           { path: 'history', element: <ChangeHistory /> },
         ],
