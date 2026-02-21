@@ -37,7 +37,9 @@
   border-radius: 10px;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-.login-card .input:focus {
+.login-card .input:focus,
+.login-card .input.input-focused {
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
 }
 .login-card .btn { padding: 0.7rem 1.25rem; font-size: 1rem; border-radius: 10px; font-weight: 600; }
@@ -181,6 +183,30 @@ button.vendor-nav-btn {
   border-radius: var(--radius);
   padding: 1rem;
   box-shadow: var(--shadow);
+}
+/* Person week page: card stands out clearly on dark background */
+.person-week-card.card-ui {
+  background: #1c1c22;
+  border-color: #35353d;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+/* Person week: breakfast / lunch / dinner meal cards */
+.person-week-meal-card.card-ui {
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--color-border);
+}
+.person-week-meal-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+.person-week-meal-card-header svg {
+  flex-shrink: 0;
 }
 .card-title { margin: 0 0 0.75rem; font-size: 1.125rem; }
 
