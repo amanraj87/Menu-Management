@@ -9,4 +9,9 @@ export const yoga = createYoga({
   context: async ({ request }) => createContext(request),
   graphiql: true,
   maskedErrors: false,
+  cors: (request) => ({
+    origin: request.headers.get('origin') ?? '*',
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Id', 'X-User-Role'],
+  }),
 })
