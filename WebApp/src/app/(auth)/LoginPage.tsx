@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, Input, Button } from '@/shared/ui'
 import { useUIStore } from '@/shared/stores/uiStore'
@@ -10,18 +10,9 @@ export function LoginPage() {
   const [email, setEmail] = useState('')
   const [passwordHash, setpasswordHash] = useState('')
   const [name, setName] = useState('')
-  const userSession = useUIStore((s) => s.userSession)
   const setUserSession = useUIStore((s) => s.setUserSession)
   const navigate = useNavigate()
   const toast = useToastStore()
-
-  useEffect(() => {
-    if (userSession?.userId && userSession?.role) {
-      if (userSession.role === 'admin') navigate('/admin', { replace: true })
-      else if (userSession.role === 'vendor') navigate('/vendor', { replace: true })
-      else navigate('/person', { replace: true })
-    }
-  }, [userSession?.userId, userSession?.role, navigate])
 
   const handleAuthSuccess = (user: { _id: string; name: string; role: string }) => {
     setUserSession({ userId: user._id, role: user.role as 'person' | 'admin' | 'vendor', name: user.name })
