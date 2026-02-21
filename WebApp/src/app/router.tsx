@@ -14,7 +14,7 @@ import { PersonFeedback } from '@/app/(person)/PersonFeedback'
 import { ViewMenu } from '@/app/shared/ViewMenu'
 import { VendorMenuManager } from '@/app/(vendor)/VendorMenuManager'
 import { VendorToday } from '@/app/(vendor)/VendorToday'
-import { VendorTomorrow } from '@/app/(vendor)/VendorTomorrow'
+import { VendorWeekView } from '@/app/(vendor)/VendorWeekView'
 import { VendorFeedback } from '@/app/(vendor)/VendorFeedback'
 
 export const router = createBrowserRouter([
@@ -56,7 +56,7 @@ export const router = createBrowserRouter([
           { index: true, element: <VendorToday /> },
           { path: 'feedback', element: <VendorFeedback /> },
           { path: 'menu', element: <VendorMenuManager /> },
-          { path: 'tomorrow', element: <VendorTomorrow /> },
+          { path: 'week', element: <VendorWeekView /> },
         ],
       },
     ],

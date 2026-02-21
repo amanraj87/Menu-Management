@@ -144,7 +144,7 @@ export function AdminCombinedOrders() {
                 value={addItemId}
                 onChange={(e) => setAddItemId(e.target.value)}
                 className="input"
-                style={{ minWidth: 160, color: addItemId ? undefined : 'var(--color-text-muted)' }}
+                style={{ minWidth: 160, fontSize: '0.875rem', color: addItemId ? undefined : 'var(--color-text-muted)' }}
               >
                 <option value="">Choose an item to add…</option>
                 {unselectedMenuItems.map((m) => (
@@ -226,7 +226,7 @@ export function AdminCombinedOrders() {
                 value={addItemId}
                 onChange={(e) => setAddItemId(e.target.value)}
                 className="input"
-                style={{ minWidth: 160, color: addItemId ? undefined : 'var(--color-text-muted)' }}
+                style={{ minWidth: 160, fontSize: '0.875rem', color: addItemId ? undefined : 'var(--color-text-muted)' }}
               >
                 <option value="">Choose an item to add…</option>
                 {unselectedMenuItems.map((m) => (

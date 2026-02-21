@@ -226,7 +226,7 @@ export function PersonWeekView() {
                       <label className="input-label" style={{ display: 'block', marginBottom: '0.25rem' }}>Add item</label>
                       <select
                         className="input"
-                        style={{ width: '100%', maxWidth: 320, color: 'var(--color-text-muted)' }}
+                        style={{ width: '100%', maxWidth: 320, fontSize: '0.875rem', color: 'var(--color-text-muted)' }}
                         value=""
                         onChange={(e) => {
                           const id = e.target.value
