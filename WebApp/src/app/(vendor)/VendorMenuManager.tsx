@@ -19,13 +19,13 @@ export function VendorMenuManager() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<MenuItem | null>(null)
   const [formName, setFormName] = useState('')
+  const [formMealType, setFormMealType] = useState<MealType>('breakfast')
   const [formUnit, setFormUnit] = useState('portion')
-  const [formDefaultQty, setFormDefaultQty] = useState(1)
+  const [formPricePerUnit, setFormPricePerUnit] = useState('')
   const toast = useToastStore()
 
   const { items: allItems, isLoading } = useMenuItems()
   const { createMenuItem, isPending: createPending } = useCreateMenuItem(
-    mealTab,
     () => { setModalOpen(false); resetForm(); toast.add('Item added.', 'success') },
     (e) => toast.add(e.message, 'error')
   )
@@ -40,13 +40,15 @@ export function VendorMenuManager() {
 
   function resetForm() {
     setFormName('')
+    setFormMealType('breakfast')
     setFormUnit('portion')
-    setFormDefaultQty(1)
+    setFormPricePerUnit('')
     setEditing(null)
   }
 
   const openAdd = () => {
     resetForm()
+    setFormMealType(mealTab)
     setEditing(null)
     setModalOpen(true)
   }
@@ -54,17 +56,19 @@ export function VendorMenuManager() {
   const openEdit = (item: MenuItem) => {
     setEditing(item)
     setFormName(item.name)
+    setFormMealType(item.mealType)
     setFormUnit(item.unit)
-    setFormDefaultQty(item.defaultQuantity ?? 1)
+    setFormPricePerUnit(item.pricePerUnit != null ? String(item.pricePerUnit) : '')
     setModalOpen(true)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    const price = formPricePerUnit.trim() === '' ? undefined : Number(formPricePerUnit)
     if (editing) {
-      updateMenuItem(editing._id, { name: formName, unit: formUnit, defaultQuantity: formDefaultQty })
+      updateMenuItem(editing._id, { name: formName, mealType: formMealType, unit: formUnit, pricePerUnit: price })
     } else {
-      createMenuItem({ name: formName, unit: formUnit, defaultQuantity: formDefaultQty })
+      createMenuItem({ name: formName, mealType: formMealType, unit: formUnit, pricePerUnit: price })
     }
   }
 
@@ -81,7 +85,7 @@ export function VendorMenuManager() {
               <Tr>
                 <Th>Name</Th>
                 <Th>Unit</Th>
-                <Th>Default qty</Th>
+                <Th>Price per unit</Th>
                 <Th aria-label="Edit" />
                 <Th aria-label="Remove" />
               </Tr>
@@ -91,7 +95,7 @@ export function VendorMenuManager() {
                 <Tr key={row._id}>
                   <Td>{row.name}</Td>
                   <Td>{row.unit}</Td>
-                  <Td>{row.defaultQuantity ?? 1}</Td>
+                  <Td>{row.pricePerUnit != null ? row.pricePerUnit : '—'}</Td>
                   <Td>
                     <button type="button" className="btn btn-ghost btn-sm" onClick={() => openEdit(row)}>Edit</button>
                   </Td>
@@ -129,6 +133,19 @@ export function VendorMenuManager() {
             required
           />
           <div>
+            <label className="input-label">Meal type</label>
+            <select
+              value={formMealType}
+              onChange={(e) => setFormMealType(e.target.value as MealType)}
+              className="input"
+              style={{ width: '100%' }}
+            >
+              {MEALS.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="input-label">Unit</label>
             <select
               value={formUnit}
@@ -141,15 +158,15 @@ export function VendorMenuManager() {
               ))}
             </select>
           </div>
-          {!editing && (
-            <Input
-              label="Default quantity"
-              type="number"
-              min={1}
-              value={formDefaultQty}
-              onChange={(e) => setFormDefaultQty(Number(e.target.value) || 1)}
-            />
-          )}
+          <Input
+            label="Price per unit"
+            type="number"
+            min={0}
+            step={0.01}
+            value={formPricePerUnit}
+            onChange={(e) => setFormPricePerUnit(e.target.value)}
+            placeholder="e.g. 50"
+          />
           <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
             <Button type="button" variant="ghost" onClick={() => setModalOpen(false)}>Cancel</Button>
             <Button type="submit" disabled={createPending || updatePending}>

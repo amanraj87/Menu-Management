@@ -1,14 +1,21 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useNavigate } from 'react-router-dom'
 import { Layout, Sidebar, Header } from '@/shared/ui'
 import { useUIStore } from '@/shared/stores/uiStore'
 import { Button } from '@/shared/ui'
 
 const personNav = [
-  { to: '/person', label: 'My choices' },
+  { to: '/person/week', label: 'My week' },
+  { to: '/person/menu', label: 'View menu' },
+  { to: '/person/feedback', label: 'Feedback and suggestion' },
 ]
 
 export function PersonLayout() {
-  const { sidebarOpen, toggleSidebar } = useUIStore()
+  const { sidebarOpen, toggleSidebar, userSession } = useUIStore()
+  const navigate = useNavigate()
+  if (!userSession?.userId) {
+    navigate('/', { replace: true })
+    return null
+  }
   return (
     <Layout>
       <Sidebar

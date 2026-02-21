@@ -6,6 +6,7 @@ export const COLLECTIONS = {
   menu_items: 'menu_items',
   selections: 'selections',
   confirmed_orders: 'confirmed_orders',
+  feedback: 'feedback',
 } as const
 
 export type CollectionName = keyof typeof COLLECTIONS

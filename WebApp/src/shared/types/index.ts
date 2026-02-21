@@ -14,7 +14,7 @@ export interface MenuItem {
   name: string
   mealType: MealType
   unit: string
-  defaultQuantity?: number
+  pricePerUnit?: number
   createdAt?: string
   updatedAt?: string
 }
@@ -69,4 +69,14 @@ export interface AggregatedOrder {
   date: string
   mealType: MealType
   items: AggregatedOrderItem[]
+}
+
+export interface Feedback {
+  _id: string
+  userId: string
+  userName: string
+  text: string
+  status: 'pending' | 'confirmed'
+  createdAt: string
+  confirmedAt?: string
 }

@@ -6,16 +6,22 @@ import { Link } from 'react-router-dom'
 
 const adminNav = [
   { to: '/admin', label: 'Dashboard' },
+  { to: '/admin/week', label: 'My week' },
   { to: '/admin/users', label: 'Users & vendors' },
   { to: '/admin/orders', label: 'Combined orders' },
-  { to: '/admin/history', label: 'Change History' },
+  { to: '/admin/feedback', label: 'Feedback & suggestions' },
+  { to: '/admin/menu', label: 'View menu' },
 ]
 
 export function AdminLayout() {
-  const { sidebarOpen, toggleSidebar } = useUIStore()
+  const { sidebarOpen, toggleSidebar, userSession } = useUIStore()
   const setUserSession = useUIStore((s) => s.setUserSession)
   const navigate = useNavigate()
-  const signOut = () => { setUserSession(null); navigate('/login') }
+  if (!userSession?.userId) {
+    navigate('/', { replace: true })
+    return null
+  }
+  const signOut = () => { setUserSession(null); navigate('/', { replace: true }) }
   return (
     <Layout>
       <Sidebar

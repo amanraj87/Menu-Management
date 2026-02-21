@@ -13,12 +13,17 @@ function nextId() {
   return `toast-${id}`
 }
 
-export const useToastStore = create<ToastState>((set) => ({
+const AUTO_DISMISS_MS = 4000
+
+export const useToastStore = create<ToastState>((set, get) => ({
   toasts: [],
-  add: (message, variant) =>
+  add: (message, variant) => {
+    const toastId = nextId()
     set((s) => ({
-      toasts: [...s.toasts, { id: nextId(), message, variant }],
-    })),
+      toasts: [...s.toasts, { id: toastId, message, variant }],
+    }))
+    setTimeout(() => get().dismiss(toastId), AUTO_DISMISS_MS)
+  },
   dismiss: (id) =>
     set((s) => ({
       toasts: s.toasts.filter((t) => t.id !== id),

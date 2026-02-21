@@ -7,7 +7,7 @@ export interface MenuItemDoc {
   name: string
   mealType: MealType
   unit: string
-  defaultQuantity?: number
+  pricePerUnit?: number
   createdAt?: Date
   updatedAt?: Date
 }
@@ -54,7 +54,19 @@ export interface UserDoc {
   name: string
   email: string
   role: 'person' | 'admin' | 'vendor'
+  passwordHash?: string
   createdAt?: Date
+}
+
+export interface FeedbackDoc {
+  _id: ObjectId
+  userId: ObjectId
+  userName: string
+  text: string
+  status: 'pending' | 'confirmed'
+  createdAt: Date
+  confirmedBy?: ObjectId
+  confirmedAt?: Date
 }
 
 export interface ContextUser {

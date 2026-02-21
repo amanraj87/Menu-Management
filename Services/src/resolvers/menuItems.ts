@@ -1,6 +1,7 @@
 import { ObjectId } from 'mongodb'
 import { getDb } from '../db.js'
 import { COLLECTIONS } from '../constants/collections.js'
+import type { ContextUser } from '../types.js'
 import type { MealType } from '../types.js'
 import type { MenuItemDoc } from '../types.js'
 
@@ -11,7 +12,7 @@ function toMenuItem(doc: MenuItemDoc | null): Record<string, unknown> | null {
     name: doc.name,
     mealType: doc.mealType,
     unit: doc.unit,
-    defaultQuantity: doc.defaultQuantity ?? null,
+    pricePerUnit: doc.pricePerUnit ?? null,
     createdAt: doc.createdAt?.toISOString() ?? null,
     updatedAt: doc.updatedAt?.toISOString() ?? null,
   }
@@ -34,15 +35,17 @@ export async function menuItem(_: unknown, args: { id: string }): Promise<Record
 
 export async function createMenuItem(
   _: unknown,
-  args: { input: { name: string; mealType: MealType; unit: string; defaultQuantity?: number } }
+  args: { input: { name: string; mealType: MealType; unit: string; pricePerUnit?: number } },
+  context: { user?: ContextUser }
 ): Promise<Record<string, unknown>> {
+  if (!context.user || context.user.role !== 'vendor') throw new Error('Only vendor can add or edit menu items')
   const db = getDb()
   const now = new Date()
   const doc = {
     name: args.input.name,
     mealType: args.input.mealType,
     unit: args.input.unit,
-    defaultQuantity: args.input.defaultQuantity,
+    pricePerUnit: args.input.pricePerUnit,
     createdAt: now,
     updatedAt: now,
   }
@@ -53,14 +56,17 @@ export async function createMenuItem(
 
 export async function updateMenuItem(
   _: unknown,
-  args: { id: string; input: { name?: string; unit?: string; defaultQuantity?: number } }
+  args: { id: string; input: { name?: string; mealType?: MealType; unit?: string; pricePerUnit?: number } },
+  context: { user?: ContextUser }
 ): Promise<Record<string, unknown> | null> {
+  if (!context.user || context.user.role !== 'vendor') throw new Error('Only vendor can add or edit menu items')
   const db = getDb()
   if (!ObjectId.isValid(args.id)) return null
   const update: Record<string, unknown> = { updatedAt: new Date() }
   if (args.input.name !== undefined) update.name = args.input.name
+  if (args.input.mealType !== undefined) update.mealType = args.input.mealType
   if (args.input.unit !== undefined) update.unit = args.input.unit
-  if (args.input.defaultQuantity !== undefined) update.defaultQuantity = args.input.defaultQuantity
+  if (args.input.pricePerUnit !== undefined) update.pricePerUnit = args.input.pricePerUnit
   const result = await db.collection(COLLECTIONS.menu_items).findOneAndUpdate(
     { _id: new ObjectId(args.id) },
     { $set: update },
@@ -69,7 +75,8 @@ export async function updateMenuItem(
   return toMenuItem(result as MenuItemDoc | null)
 }
 
-export async function deleteMenuItem(_: unknown, args: { id: string }): Promise<boolean> {
+export async function deleteMenuItem(_: unknown, args: { id: string }, context: { user?: ContextUser }): Promise<boolean> {
+  if (!context.user || context.user.role !== 'vendor') throw new Error('Only vendor can remove menu items')
   const db = getDb()
   if (!ObjectId.isValid(args.id)) return false
   const result = await db.collection(COLLECTIONS.menu_items).deleteOne({ _id: new ObjectId(args.id) })

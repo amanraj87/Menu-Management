@@ -7,30 +7,34 @@ import { VendorLayout } from './layouts/VendorLayout'
 import { LoginPage } from '@/app/(auth)/LoginPage'
 import { AdminDashboard } from '@/app/(admin)/AdminDashboard'
 import { AdminCombinedOrders } from '@/app/(admin)/AdminCombinedOrders'
+import { AdminFeedback } from '@/app/(admin)/AdminFeedback'
 import { AdminUsers } from '@/app/(admin)/AdminUsers'
-import { ChangeHistory } from '@/app/(admin)/ChangeHistory'
-import { PersonChooseMeals } from '@/app/(person)/PersonChooseMeals'
+import { PersonWeekView } from '@/app/(person)/PersonWeekView'
+import { PersonFeedback } from '@/app/(person)/PersonFeedback'
+import { ViewMenu } from '@/app/shared/ViewMenu'
 import { VendorMenuManager } from '@/app/(vendor)/VendorMenuManager'
 import { VendorToday } from '@/app/(vendor)/VendorToday'
 import { VendorTomorrow } from '@/app/(vendor)/VendorTomorrow'
+import { VendorFeedback } from '@/app/(vendor)/VendorFeedback'
 
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <AppLayout />,
     children: [
-      { index: true, element: <Navigate to="/person" replace /> },
       {
+        path: '',
         element: <AuthLayout />,
-        children: [
-          { path: 'login', element: <LoginPage /> },
-        ],
+        children: [{ index: true, element: <LoginPage /> }],
       },
       {
         path: 'person',
         element: <PersonLayout />,
         children: [
-          { index: true, element: <PersonChooseMeals /> },
+          { index: true, element: <Navigate to="/person/week" replace /> },
+          { path: 'week', element: <PersonWeekView /> },
+          { path: 'menu', element: <ViewMenu /> },
+          { path: 'feedback', element: <PersonFeedback /> },
         ],
       },
       {
@@ -38,9 +42,11 @@ export const router = createBrowserRouter([
         element: <AdminLayout />,
         children: [
           { index: true, element: <AdminDashboard /> },
+          { path: 'week', element: <PersonWeekView /> },
           { path: 'users', element: <AdminUsers /> },
           { path: 'orders', element: <AdminCombinedOrders /> },
-          { path: 'history', element: <ChangeHistory /> },
+          { path: 'feedback', element: <AdminFeedback /> },
+          { path: 'menu', element: <ViewMenu /> },
         ],
       },
       {
@@ -48,6 +54,7 @@ export const router = createBrowserRouter([
         element: <VendorLayout />,
         children: [
           { index: true, element: <VendorToday /> },
+          { path: 'feedback', element: <VendorFeedback /> },
           { path: 'menu', element: <VendorMenuManager /> },
           { path: 'tomorrow', element: <VendorTomorrow /> },
         ],

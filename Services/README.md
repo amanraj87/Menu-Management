@@ -46,7 +46,7 @@ Inputs: `CreateMenuItemInput`, `UpdateMenuItemInput`, `PutSelectionInput` (date,
 Same as WebApp docs:
 
 - **users** — name, email, role (`person` | `admin` | `vendor`)
-- **menu_items** — name, mealType, unit, defaultQuantity
+- **menu_items** — name, mealType, unit, pricePerUnit
 - **selections** — userId, date, mealType, items: [{ menuItemId, quantity }]
 - **confirmed_orders** — date, mealType, items (with personBreakdown), confirmedBy, confirmedAt
 

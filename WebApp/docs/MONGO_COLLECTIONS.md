@@ -30,13 +30,14 @@ The **Services** backend connects to **one database** and uses **four collection
 
 Stores everyone who can use the app: persons (choose food), admin (see combined + confirm), vendor (update menu).
 
-| Field       | Type     | Required | Description |
-|------------|----------|----------|-------------|
-| `_id`      | ObjectId | yes      | Auto-generated |
-| `name`     | string   | yes      | Display name |
-| `email`    | string   | yes      | Unique; used for login |
-| `role`     | string   | yes      | One of: `person`, `admin`, `vendor` |
-| `createdAt`| Date     | no       | Optional |
+| Field         | Type     | Required | Description |
+|---------------|----------|----------|-------------|
+| `_id`         | ObjectId | yes      | Auto-generated |
+| `name`        | string   | yes      | Display name |
+| `email`       | string   | yes      | Unique; used for login (stored lowercased) |
+| `role`        | string   | yes      | One of: `person`, `admin`, `vendor` |
+| `passwordHash`| string   | no       | bcrypt hash; required for login (sign-up sets this) |
+| `createdAt`   | Date     | no       | Optional |
 
 **Index:** `email` (unique).
 
@@ -52,7 +53,7 @@ Menu items that vendor can add/edit/delete. Persons choose from these for each m
 | `name`           | string | yes      | e.g. "Chicken Biryani", "Idly" |
 | `mealType`       | string | yes      | One of: `breakfast`, `lunch`, `dinner` |
 | `unit`           | string | yes      | e.g. `portion`, `kg`, `piece` |
-| `defaultQuantity`| number | no       | Default when person selects (e.g. 1) |
+| `pricePerUnit`   | number | no       | Price per unit (e.g. 50) |
 | `createdAt`      | Date   | no       | Optional |
 | `updatedAt`      | Date   | no       | Optional |
 
@@ -141,8 +142,8 @@ Base URL: set `VITE_API_URL` in `.env` (e.g. `http://localhost:3001/api`). If un
 | Method | Path | Purpose |
 |--------|------|--------|
 | GET | `/menu-items?mealType=breakfast\|lunch\|dinner` | List menu items (optional filter) |
-| POST | `/menu-items` | Create menu item (body: name, mealType, unit, defaultQuantity?) |
-| PATCH | `/menu-items/:id` | Update menu item (body: name?, unit?, defaultQuantity?) |
+| POST | `/menu-items` | Create menu item (body: name, mealType, unit, pricePerUnit?) |
+| PATCH | `/menu-items/:id` | Update menu item (body: name?, mealType?, unit?, pricePerUnit?) |
 | DELETE | `/menu-items/:id` | Delete menu item |
 | GET | `/selections?date=YYYY-MM-DD&mealType=...` | Get current user's selection for that date+meal (return `{ selection: null }` if none) |
 | PUT | `/selections` | Upsert current user's selection (body: date, mealType, items: [{ menuItemId, quantity }]) |

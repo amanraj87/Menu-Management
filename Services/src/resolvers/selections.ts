@@ -33,6 +33,34 @@ export async function mySelection(
   return toSelection(doc)
 }
 
+const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner']
+
+export async function mySelectionsForWeek(
+  _: unknown,
+  args: { startDate: string },
+  context: { user?: ContextUser }
+): Promise<Record<string, unknown>[]> {
+  const user = context.user
+  if (!user) return []
+  const db = getDb()
+  const results: Record<string, unknown>[] = []
+  const start = new Date(args.startDate + 'T00:00:00')
+  for (let d = 0; d < 7; d++) {
+    const date = new Date(start)
+    date.setDate(start.getDate() + d)
+    const dateStr = date.toISOString().slice(0, 10)
+    for (const mealType of MEAL_TYPES) {
+      const doc = await db.collection(COLLECTIONS.selections).findOne({
+        userId: new ObjectId(user.userId),
+        date: dateStr,
+        mealType,
+      }) as SelectionDoc | null
+      results.push(toSelection(doc) ?? { id: `${dateStr}-${mealType}`, userId: user.userId, date: dateStr, mealType, items: [], updatedAt: null })
+    }
+  }
+  return results
+}
+
 export async function putSelection(
   _: unknown,
   args: { input: { date: string; mealType: MealType; items: { menuItemId: string; quantity: number }[] } },

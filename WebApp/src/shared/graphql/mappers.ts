@@ -1,4 +1,4 @@
-import type { MenuItem, Selection, SelectionItem, AggregatedOrder, ConfirmedOrder, User } from '@/shared/types'
+import type { MenuItem, Selection, SelectionItem, AggregatedOrder, ConfirmedOrder, User, Feedback } from '@/shared/types'
 
 /** GraphQL returns id; app types use _id. Map so components keep using _id. */
 export function toUser(g: { id: string; name: string; email: string; role: string; createdAt?: string | null }): User {
@@ -11,13 +11,13 @@ export function toUser(g: { id: string; name: string; email: string; role: strin
   }
 }
 
-export function toMenuItem(g: { id: string; name: string; mealType: string; unit: string; defaultQuantity?: number | null; createdAt?: string | null; updatedAt?: string | null }): MenuItem {
+export function toMenuItem(g: { id: string; name: string; mealType: string; unit: string; pricePerUnit?: number | null; createdAt?: string | null; updatedAt?: string | null }): MenuItem {
   return {
     _id: g.id,
     name: g.name,
     mealType: g.mealType as MenuItem['mealType'],
     unit: g.unit,
-    defaultQuantity: g.defaultQuantity ?? undefined,
+    pricePerUnit: g.pricePerUnit ?? undefined,
     createdAt: g.createdAt ?? undefined,
     updatedAt: g.updatedAt ?? undefined,
   }
@@ -81,5 +81,17 @@ export function toConfirmedOrder(g: {
     })),
     confirmedBy: g.confirmedBy,
     confirmedAt: g.confirmedAt,
+  }
+}
+
+export function toFeedback(g: { id: string; userId: string; userName: string; text: string; status: string; createdAt: string; confirmedAt?: string | null }): Feedback {
+  return {
+    _id: g.id,
+    userId: g.userId,
+    userName: g.userName,
+    text: g.text,
+    status: g.status as Feedback['status'],
+    createdAt: g.createdAt,
+    confirmedAt: g.confirmedAt ?? undefined,
   }
 }

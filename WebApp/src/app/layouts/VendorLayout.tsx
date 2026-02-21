@@ -1,15 +1,23 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useNavigate } from 'react-router-dom'
 import { Layout, Header } from '@/shared/ui'
 import { Link } from 'react-router-dom'
+import { useUIStore } from '@/shared/stores/uiStore'
 import { LiveUpdateBanner } from '@/features/vendor/LiveUpdateBanner'
 
 const vendorNav = [
   { to: '/vendor', label: "Today's orders" },
   { to: '/vendor/tomorrow', label: 'Tomorrow' },
+  { to: '/vendor/feedback', label: 'Feedback' },
   { to: '/vendor/menu', label: 'Update menu' },
 ]
 
 export function VendorLayout() {
+  const userSession = useUIStore((s) => s.userSession)
+  const navigate = useNavigate()
+  if (!userSession?.userId) {
+    navigate('/', { replace: true })
+    return null
+  }
   return (
     <Layout>
       <Header

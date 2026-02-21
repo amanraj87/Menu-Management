@@ -24,27 +24,43 @@ export function PersonChooseMeals() {
   const { selection, isLoading: selectionLoading } = useMySelection(date, mealTab)
   const { putSelection, isPending: putPending } = usePutSelection(date, mealTab, () => toast.add('Saved.', 'success'), (e) => toast.add(e.message, 'error'))
 
-  const currentSelection = selection?.items ?? []
-  const selectionByItem = new Map(currentSelection.map((i) => [i.menuItemId, i.quantity]))
-
   const [quantities, setQuantities] = useState<Record<string, number>>({})
+  const selectionKey = selection != null ? JSON.stringify(selection.items.map((i) => [i.menuItemId, i.quantity])) : ''
+  const menuIdsKey = menuItems.map((m) => m._id).join(',')
+
   useEffect(() => {
+    const items = selection?.items ?? []
+    const selectionByItem = new Map(items.map((i) => [i.menuItemId, i.quantity]))
     const next: Record<string, number> = {}
     menuItems.forEach((item: MenuItem) => {
-      next[item._id] = quantities[item._id] ?? selectionByItem.get(item._id) ?? item.defaultQuantity ?? 1
+      next[item._id] = selectionByItem.get(item._id) ?? 0
     })
-    setQuantities((prev) => ({ ...prev, ...next }))
-  }, [menuItems, selectionByItem])
+    setQuantities(next)
+  }, [date, mealTab, selectionKey, menuIdsKey])
+
+  const [draftQty, setDraftQty] = useState<Record<string, string>>({})
 
   const handleQty = (menuItemId: string, qty: number) => {
-    if (qty < 1) return
+    if (qty < 0) return
     setQuantities((prev) => ({ ...prev, [menuItemId]: qty }))
+    setDraftQty((prev) => { const next = { ...prev }; delete next[menuItemId]; return next })
+  }
+
+  const commitDraftQty = (menuItemId: string) => {
+    const raw = draftQty[menuItemId]
+    setDraftQty((prev) => { const next = { ...prev }; delete next[menuItemId]; return next })
+    if (raw === undefined || raw === '') {
+      setQuantities((prev) => ({ ...prev, [menuItemId]: 0 }))
+      return
+    }
+    const v = Number(raw)
+    setQuantities((prev) => ({ ...prev, [menuItemId]: Number.isNaN(v) || v < 0 ? 0 : v }))
   }
 
   const handleSave = () => {
     const items = menuItems
       .filter((m: MenuItem) => (quantities[m._id] ?? 0) > 0)
-      .map((m: MenuItem) => ({ menuItemId: m._id, quantity: quantities[m._id] ?? 1 }))
+      .map((m: MenuItem) => ({ menuItemId: m._id, quantity: quantities[m._id] ?? 0 }))
     putSelection(items)
   }
 
@@ -81,16 +97,35 @@ export function PersonChooseMeals() {
                 }}
               >
                 <span>{item.name}</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <input
-                    type="number"
-                    min={0}
-                    value={quantities[item._id] ?? 0}
-                    onChange={(e) => handleQty(item._id, Number(e.target.value) || 0)}
-                    className="input"
-                    style={{ width: 64, textAlign: 'center' }}
-                  />
-                  <span style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>{item.unit}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    aria-label="Decrease"
+                    onClick={() => handleQty(item._id, Math.max(0, (quantities[item._id] ?? 0) - 1))}
+                  >
+                    −
+                  </button>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.1"
+                            inputMode="decimal"
+                            aria-label="Quantity"
+                            value={draftQty[item._id] ?? quantities[item._id] ?? 0}
+                            onChange={(e) => setDraftQty((prev) => ({ ...prev, [item._id]: e.target.value }))}
+                            onBlur={() => commitDraftQty(item._id)}
+                            className="input input-qty"
+                            style={{ width: 52, textAlign: 'center' }}
+                          />
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    aria-label="Increase"
+                    onClick={() => handleQty(item._id, (quantities[item._id] ?? 0) + 1)}
+                  >
+                    +
+                  </button>
                 </div>
               </li>
             ))}
