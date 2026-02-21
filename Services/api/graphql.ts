@@ -1,7 +1,9 @@
 import 'dotenv/config'
 import { connectDb } from '../dist/db.js'
-// @ts-expect-error dist/ is build output (gitignored); exists at runtime after npm run build
 import { yoga } from '../dist/app.js'
+
+/** Allow up to 15s for cold start + MongoDB connection (Vercel Pro: up to 300s). */
+export const maxDuration = 15
 
 /** Vercel serverless handler: GraphQL at /api/graphql */
 export default async function handler(request: Request): Promise<Response> {
