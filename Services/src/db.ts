@@ -17,14 +17,9 @@ function getDbName(): string {
   return 'foodops'
 }
 
-const MONGO_CONNECT_OPTIONS = {
-  serverSelectionTimeoutMS: 10_000,
-  connectTimeoutMS: 10_000,
-}
-
 export async function connectDb(): Promise<Db> {
   if (db) return db
-  client = new MongoClient(uri, MONGO_CONNECT_OPTIONS)
+  client = new MongoClient(uri)
   await client.connect()
   const dbName = getDbName()
   db = client.db(dbName)
