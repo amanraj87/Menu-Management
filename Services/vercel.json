@@ -1,8 +1,5 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "public",
-  "rewrites": [{ "source": "/graphql", "destination": "/api/graphql" }],
-  "routes": [
-    { "src": "/(.*)", "dest": "/src/index.ts" }
-  ]
+  "rewrites": [{ "source": "/graphql", "destination": "/api/graphql" }]
 }
