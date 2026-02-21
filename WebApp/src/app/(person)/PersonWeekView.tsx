@@ -27,6 +27,13 @@ function getWeekStart(dateStr: string): string {
   return toDateString(d)
 }
 
+/** Add N days to a date string (YYYY-MM-DD), return YYYY-MM-DD */
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T12:00:00')
+  d.setDate(d.getDate() + days)
+  return toDateString(d)
+}
+
 function qtyKey(date: string, mealType: MealType, menuItemId: string) {
   return `${date}-${mealType}-${menuItemId}`
 }
@@ -82,6 +89,40 @@ export function PersonWeekView() {
     onError: (e) => toast.add(e.message, 'error'),
   })
   const [saving, setSaving] = useState(false)
+  const [importing, setImporting] = useState(false)
+
+  const handleImportFromLastWeek = async () => {
+    const lastWeekStart = addDays(startDate, -7)
+    setImporting(true)
+    try {
+      const result = await client.query<{ mySelectionsForWeek: Array<{ date: string; mealType: string; items: { menuItemId: string; quantity: number }[] }> }>({
+        query: MY_SELECTIONS_FOR_WEEK,
+        variables: { startDate: lastWeekStart },
+      })
+      const lastWeekSelections = result.data?.mySelectionsForWeek ?? []
+      const lastWeekDates: string[] = []
+      for (let i = 0; i < 7; i++) {
+        lastWeekDates.push(addDays(lastWeekStart, i))
+      }
+      const imported: Record<string, number> = {}
+      for (const s of lastWeekSelections) {
+        const dayIndex = lastWeekDates.indexOf(s.date)
+        if (dayIndex === -1) continue
+        const targetDate = weekDates[dayIndex]
+        for (const item of s.items) {
+          if (item.quantity > 0) {
+            imported[qtyKey(targetDate, s.mealType as MealType, item.menuItemId)] = item.quantity
+          }
+        }
+      }
+      setQuantities((prev) => ({ ...prev, ...imported }))
+      toast.add('Last week\'s selections imported into this week.', 'success')
+    } catch (e) {
+      toast.add(e instanceof Error ? e.message : 'Failed to import last week', 'error')
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const handleSaveWeek = async () => {
     setSaving(true)
@@ -122,15 +163,25 @@ export function PersonWeekView() {
       <p style={{ color: 'var(--color-text-muted)', marginBottom: '1rem', fontSize: '0.875rem' }}>
         Set your choices for each day of the week. You can edit any day and save once.
       </p>
-      <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.25rem' }}>Week of</label>
-        <input
-          type="date"
-          value={weekOf}
-          onChange={(e) => setWeekOf(e.target.value)}
-          className="input"
-          style={{ width: '100%', maxWidth: 200 }}
-        />
+      <div style={{ marginBottom: '1rem', display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '0.75rem' }}>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.25rem' }}>Week of</label>
+          <input
+            type="date"
+            value={weekOf}
+            onChange={(e) => setWeekOf(e.target.value)}
+            className="input"
+            style={{ width: '100%', maxWidth: 200 }}
+          />
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={handleImportFromLastWeek}
+          disabled={importing}
+        >
+          {importing ? 'Importing…' : 'Import from last week'}
+        </Button>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         {weekDates.map((dateStr, dayIndex) => (
