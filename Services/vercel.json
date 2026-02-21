@@ -1,0 +1,4 @@
+{
+  "buildCommand": "npm run build",
+  "rewrites": [{ "source": "/graphql", "destination": "/api/graphql" }, { "source": "/graphql/(.*)", "destination": "/api/graphql" }]
+}
