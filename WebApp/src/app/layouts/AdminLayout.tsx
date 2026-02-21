@@ -1,7 +1,6 @@
 import { Outlet, useNavigate } from 'react-router-dom'
 import { Layout, Sidebar, Header } from '@/shared/ui'
 import { useUIStore } from '@/shared/stores/uiStore'
-import { Button } from '@/shared/ui'
 import { Link } from 'react-router-dom'
 
 const adminNav = [
@@ -34,14 +33,13 @@ export function AdminLayout() {
         <Header
           title="Admin Portal"
           actions={
-            <>
-              <Button variant="ghost" size="sm" onClick={toggleSidebar} className="md:hidden">
+            <nav className="vendor-nav">
+              <button type="button" className="vendor-nav-btn md:hidden" onClick={toggleSidebar}>
                 Menu
-              </Button>
-              <Link to="/person"><Button variant="outline" size="sm">My meals</Button></Link>
-              <Link to="/vendor"><Button variant="outline" size="sm">Vendor</Button></Link>
-              <Button variant="ghost" size="sm" onClick={signOut}>Sign out</Button>
-            </>
+              </button>
+              <Link to="/vendor" className="vendor-nav-btn">Vendor</Link>
+              <button type="button" className="vendor-nav-btn" onClick={signOut}>Sign out</button>
+            </nav>
           }
         />
         <main style={{ padding: '1.25rem', flex: 1 }}>

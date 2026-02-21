@@ -40,7 +40,7 @@ export async function login(
 ): Promise<Record<string, unknown>> {
   const db = getDb()
   const doc = await db.collection(COLLECTIONS.users).findOne({ email: args.email.trim().toLowerCase() }) as UserDoc | null
-  if (!doc) throw new Error('Invalid email or passwordHash')
+  if (!doc) throw new Error('User not found')
   if (!doc.passwordHash) throw new Error('This account has no passwordHash set. Contact an admin.')
   const stored = doc.passwordHash
   const ok = isBcryptHash(stored)

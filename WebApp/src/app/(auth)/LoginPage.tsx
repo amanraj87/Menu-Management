@@ -45,7 +45,14 @@ export function LoginPage() {
       }
       signUp({ name: trimmedName, email: trimmedEmail, passwordHash })
     } else {
-      login(trimmedEmail, passwordHash).then(handleAuthSuccess).catch((e: Error) => toast.add(e.message, 'error'))
+      login(trimmedEmail, passwordHash)
+        .then(handleAuthSuccess)
+        .catch((e: Error) => {
+          const msg = e.message === 'User not found'
+            ? 'No user found with this id, please sign up first'
+            : e.message
+          toast.add(msg, 'error')
+        })
     }
   }
 

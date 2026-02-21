@@ -46,7 +46,7 @@ export function VendorToday() {
         <MealBlock title="DINNER" items={byMeal.dinner ?? []} />
       </Card>
       <p style={{ marginTop: '1rem', textAlign: 'center' }}>
-        <Link to="/vendor/tomorrow" style={{ color: 'var(--color-primary)' }}>Tomorrow expected order →</Link>
+        <Link to="/vendor/week" style={{ color: 'var(--color-primary)' }}>Week view →</Link>
         {' · '}
         <Link to="/vendor/menu" style={{ color: 'var(--color-primary)' }}>Update menu</Link>
       </p>

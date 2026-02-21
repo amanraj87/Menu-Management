@@ -1,14 +1,13 @@
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Outlet, useNavigate, NavLink, Link } from 'react-router-dom'
 import { Layout, Header } from '@/shared/ui'
-import { Link } from 'react-router-dom'
 import { useUIStore } from '@/shared/stores/uiStore'
 import { LiveUpdateBanner } from '@/features/vendor/LiveUpdateBanner'
 
 const vendorNav = [
-  { to: '/vendor', label: "Today's orders" },
-  { to: '/vendor/tomorrow', label: 'Tomorrow' },
-  { to: '/vendor/feedback', label: 'Feedback' },
-  { to: '/vendor/menu', label: 'Update menu' },
+  { to: '/vendor', label: "Today's orders", end: true },
+  { to: '/vendor/week', label: 'Week', end: false },
+  { to: '/vendor/feedback', label: 'Feedback', end: false },
+  { to: '/vendor/menu', label: 'Update menu', end: false },
 ]
 
 export function VendorLayout() {
@@ -23,11 +22,22 @@ export function VendorLayout() {
       <Header
         title="Vendor Portal"
         actions={
-          <nav style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <nav className="vendor-nav">
             {vendorNav.map((item) => (
-              <Link key={item.to} to={item.to} style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>{item.label}</Link>
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) =>
+                  `vendor-nav-btn ${isActive ? 'vendor-nav-btn-active' : ''}`
+                }
+              >
+                {item.label}
+              </NavLink>
             ))}
-            <Link to="/admin" style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginLeft: '0.5rem' }}>Admin</Link>
+            <Link to="/admin" className="vendor-nav-btn vendor-nav-btn-admin">
+              Admin
+            </Link>
           </nav>
         }
       />
