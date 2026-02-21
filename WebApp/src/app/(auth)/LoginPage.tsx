@@ -59,13 +59,13 @@ export function LoginPage() {
   const isPending = loginPending || signUpPending
 
   return (
-    <Card title={isSignUp ? 'Sign up' : 'Sign in'}>
-      <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+    <Card className="login-card" title={isSignUp ? 'Sign up' : 'Sign in'}>
+      <p style={{ color: 'var(--color-text-muted)', marginBottom: '1.5rem' }}>
         {isSignUp
           ? 'Create an account. You will be able to choose meals as a person.'
           : 'Sign in with your email and passwordHash.'}
       </p>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
         {isSignUp && (
           <Input
             label="Name"
@@ -84,7 +84,7 @@ export function LoginPage() {
           required
         />
         <Input
-          label="password"
+          label="Password"
           type="password"
           value={passwordHash}
           onChange={(e) => setpasswordHash(e.target.value)}
@@ -95,7 +95,7 @@ export function LoginPage() {
           {isPending ? (isSignUp ? 'Creating account…' : 'Signing in…') : isSignUp ? 'Sign up' : 'Sign in'}
         </Button>
       </form>
-      <p style={{ marginTop: '1rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
+      <p>
         {isSignUp ? (
           <>
             Already have an account?{' '}
