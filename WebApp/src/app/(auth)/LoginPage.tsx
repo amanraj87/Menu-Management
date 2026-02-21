@@ -78,7 +78,7 @@ export function LoginPage() {
         />
         <Input
           label="password"
-          type="passwordHash"
+          type="password"
           value={passwordHash}
           onChange={(e) => setpasswordHash(e.target.value)}
           placeholder={isSignUp ? 'Choose a password' : 'Your password'}
