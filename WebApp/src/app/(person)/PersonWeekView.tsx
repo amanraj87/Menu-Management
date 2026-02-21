@@ -14,6 +14,33 @@ const MEALS: { id: MealType; label: string }[] = [
 ]
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
+const MealIcon = ({ mealId }: { mealId: MealType }) => {
+  const size = 18
+  const style = { width: size, height: size, color: 'var(--color-text-muted)', flexShrink: 0 }
+  if (mealId === 'breakfast') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style} aria-hidden>
+        <path d="M2 17h20" />
+        <path d="M7 17a5 5 0 0 0 10 0" />
+        <path d="M12 7v2M9 10l1.5 1.5M15 10l-1.5 1.5" />
+      </svg>
+    )
+  }
+  if (mealId === 'lunch') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style} aria-hidden>
+        <circle cx="12" cy="12" r="5" />
+        <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+      </svg>
+    )
+  }
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style} aria-hidden>
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  )
+}
+
 function toDateString(d: Date) {
   return d.toISOString().slice(0, 10)
 }
@@ -159,7 +186,7 @@ export function PersonWeekView() {
   if (menuLoading || weekLoading) return <Loader />
 
   return (
-    <Card title="My week — choose meals for each day">
+    <Card className="person-week-card" title="My week — choose meals for each day">
       <p style={{ color: 'var(--color-text-muted)', marginBottom: '1rem', fontSize: '0.875rem' }}>
         Set your choices for each day of the week. You can edit any day and save once.
       </p>
@@ -207,10 +234,11 @@ export function PersonWeekView() {
                 (item: MenuItem) => (quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0) === 0
               )
               return (
-                <div key={meal.id} style={{ flex: '1 1 200px', minWidth: 0 }}>
-                  <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-                    {meal.label}
-                  </h4>
+                <Card key={meal.id} className="person-week-meal-card" style={{ flex: '1 1 200px', minWidth: 0 }}>
+                  <div className="person-week-meal-card-header">
+                    <MealIcon mealId={meal.id} />
+                    <span>{meal.label}</span>
+                  </div>
                   {selectedItems.length === 0 ? (
                     <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', margin: 0 }}>
                       No items selected.
@@ -294,7 +322,7 @@ export function PersonWeekView() {
                       </select>
                     </div>
                   )}
-                </div>
+                </Card>
               )
             })}
             </div>
