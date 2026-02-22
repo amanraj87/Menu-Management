@@ -61,8 +61,8 @@ export function VendorWeekView() {
 
   return (
     <>
-      <Card title="Week — food items by day">
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem', marginBottom: '1rem' }}>
+      <Card className="content-card" title="Week — food items by day">
+        <p className="content-subtitle">
           Confirmed orders for the next 7 days. Admin must confirm orders for each date for them to appear.
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>

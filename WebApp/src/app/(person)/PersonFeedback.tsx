@@ -25,19 +25,19 @@ export function PersonFeedback() {
   }
 
   return (
-    <Card title="Feedback and suggestion">
-      <p style={{ color: 'var(--color-text-muted)', marginBottom: '1rem', fontSize: '0.875rem' }}>
+    <Card className="content-card" title="Feedback and suggestion">
+      <p className="content-subtitle">
         Share feedback or suggestions about the menu or service. Admin will review; once confirmed, it goes to the vendor.
       </p>
       <form onSubmit={handleSubmit}>
-        <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.25rem' }}>Your feedback</label>
+        <label className="content-label">Your feedback</label>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           className="input"
           rows={4}
           placeholder="Type your feedback or suggestion here…"
-          style={{ width: '100%', maxWidth: 480, resize: 'vertical', marginBottom: '1rem' }}
+          style={{ width: '100%', maxWidth: 480, marginBottom: '1rem' }}
         />
         <Button type="submit" disabled={isPending || !text.trim()}>
           {isPending ? 'Submitting…' : 'Submit'}

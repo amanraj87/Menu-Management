@@ -17,13 +17,13 @@ export function AdminFeedback() {
   if (isLoading) return <Loader />
 
   return (
-    <Card title="Feedback and suggestions">
-      <p style={{ color: 'var(--color-text-muted)', marginBottom: '1rem', fontSize: '0.875rem' }}>
+    <Card className="content-card" title="Feedback and suggestions">
+      <p className="content-subtitle">
         Review feedback from users. Confirm to send to the vendor.
       </p>
       {pending.length > 0 && (
         <section style={{ marginBottom: '1.5rem' }}>
-          <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             Pending <Badge variant="warning">{pending.length}</Badge>
           </h3>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
@@ -35,7 +35,7 @@ export function AdminFeedback() {
       )}
       {confirmed.length > 0 && (
         <section>
-          <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             Confirmed (sent to vendor)
           </h3>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
@@ -46,7 +46,7 @@ export function AdminFeedback() {
         </section>
       )}
       {feedbacks.length === 0 && (
-        <p style={{ color: 'var(--color-text-muted)' }}>No feedback yet.</p>
+        <p className="content-subtitle" style={{ marginBottom: 0 }}>No feedback yet.</p>
       )}
     </Card>
   )
@@ -63,15 +63,7 @@ function FeedbackCard({
 }) {
   const isPending = feedback.status === 'pending'
   return (
-    <li
-      style={{
-        border: '1px solid var(--color-border)',
-        borderRadius: 8,
-        padding: '1rem',
-        marginBottom: '0.5rem',
-        background: 'var(--color-surface)',
-      }}
-    >
+    <li className="content-feedback-item">
       <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '0.25rem' }}>
         {feedback.userName} · {new Date(feedback.createdAt).toLocaleString()}
         {feedback.confirmedAt && (

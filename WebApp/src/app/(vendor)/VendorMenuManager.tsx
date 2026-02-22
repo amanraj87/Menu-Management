@@ -185,8 +185,8 @@ export function VendorMenuManager() {
   }))
 
   return (
-    <Card title="Update menu">
-      <p style={{ color: 'var(--color-text-muted)', marginBottom: '1rem', fontSize: '0.875rem' }}>
+    <Card className="content-card" title="Update menu">
+      <p className="content-subtitle">
         Add, edit or remove items for each meal. People choose from this menu.
       </p>
       <Tabs tabs={tabs} activeId={mealTab} onSelect={(id) => setMealTab(id as MealType)} />

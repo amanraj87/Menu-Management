@@ -39,12 +39,12 @@ export function AdminUsers() {
 
   return (
     <>
-      <Card title="Users & vendors">
-        <p style={{ color: 'var(--color-text-muted)', marginBottom: '1rem', fontSize: '0.875rem' }}>
+      <Card className="content-card" title="Users & vendors">
+        <p className="content-subtitle">
           Add users (persons who choose meals) and vendors (who update the menu). Only admins can create users.
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
-          <label style={{ fontSize: '0.875rem' }}>Role:</label>
+          <label className="content-label" style={{ display: 'inline-block', marginBottom: 0, marginRight: '0.25rem' }}>Role</label>
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value as UserRole | '')}

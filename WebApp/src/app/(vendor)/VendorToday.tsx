@@ -40,7 +40,7 @@ export function VendorToday() {
 
   return (
     <>
-      <Card title={`TODAY — ${today}`}>
+      <Card className="content-card" title={`TODAY — ${today}`}>
         <MealBlock title="BREAKFAST" items={byMeal.breakfast ?? []} />
         <MealBlock title="LUNCH" items={byMeal.lunch ?? []} />
         <MealBlock title="DINNER" items={byMeal.dinner ?? []} />
