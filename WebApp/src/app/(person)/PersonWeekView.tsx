@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, Button, Loader } from '@/shared/ui'
 import type { MealType, MenuItem } from '@/shared/types'
 import { useMutation } from '@apollo/client/react'
@@ -93,6 +93,35 @@ export function PersonWeekView() {
   }
 
   const [draftQty, setDraftQty] = useState<Record<string, string>>({})
+  const [collapsedDays, setCollapsedDays] = useState<Set<string>>(new Set())
+  const [openAddItemKey, setOpenAddItemKey] = useState<string | null>(null)
+  const [addItemSearch, setAddItemSearch] = useState<Record<string, string>>({})
+  const [addItemAnchor, setAddItemAnchor] = useState<DOMRect | null>(null)
+  const addItemPopoverRef = useRef<HTMLDivElement>(null)
+
+  const closeAddItemPopover = () => {
+    setOpenAddItemKey(null)
+    setAddItemAnchor(null)
+  }
+
+  useEffect(() => {
+    if (openAddItemKey == null) return
+    const onMouseDown = (e: MouseEvent) => {
+      if (addItemPopoverRef.current?.contains(e.target as Node)) return
+      closeAddItemPopover()
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [openAddItemKey])
+
+  const toggleDay = (dateStr: string) => {
+    setCollapsedDays((prev) => {
+      const next = new Set(prev)
+      if (next.has(dateStr)) next.delete(dateStr)
+      else next.add(dateStr)
+      return next
+    })
+  }
 
   const handleQty = (date: string, mealType: MealType, menuItemId: string, qty: number) => {
     if (qty < 0) return
@@ -211,19 +240,61 @@ export function PersonWeekView() {
         </Button>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        {weekDates.map((dateStr, dayIndex) => (
+        {weekDates.map((dateStr, dayIndex) => {
+          const isCollapsed = collapsedDays.has(dateStr)
+          return (
           <div
             key={dateStr}
             style={{
               border: '1px solid var(--color-border)',
               borderRadius: 8,
-              padding: '1rem',
+              overflow: 'hidden',
               background: 'var(--color-surface)',
             }}
           >
-            <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem' }}>
-              {DAY_NAMES[dayIndex]} — {dateStr}
-            </h3>
+            <button
+              type="button"
+              onClick={() => toggleDay(dateStr)}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '0.5rem',
+                padding: '1rem',
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                textAlign: 'left',
+                font: 'inherit',
+                color: 'inherit',
+              }}
+              aria-expanded={!isCollapsed}
+            >
+              <h3 style={{ margin: 0, fontSize: '1rem' }}>
+                {DAY_NAMES[dayIndex]} — {dateStr}
+              </h3>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{
+                  flexShrink: 0,
+                  transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s ease',
+                }}
+                aria-hidden
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+            {!isCollapsed && (
+            <div style={{ padding: '1rem 1rem 1rem' }}>
             <div style={{ display: 'flex', flexDirection: 'row', gap: '1.5rem', flexWrap: 'wrap' }}>
             {MEALS.map((meal) => {
               const allMealItems = menuByMeal[meal.id]
@@ -252,7 +323,7 @@ export function PersonWeekView() {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
-                            padding: '0.35rem 0',
+                            padding: '0.6rem 0',
                             borderBottom: '1px solid var(--color-border)',
                           }}
                         >
@@ -301,37 +372,141 @@ export function PersonWeekView() {
                     </ul>
                   )}
                   {unselectedItems.length > 0 && (
-                    <div style={{ marginTop: '0.5rem' }}>
-                      <label className="input-label" style={{ display: 'block', marginBottom: '0.25rem' }}>Add item</label>
-                      <select
+                    <div style={{ marginTop: '1rem' }}>
+                      <button
+                        type="button"
                         className="input"
-                        style={{ width: '100%', maxWidth: 320, fontSize: '0.875rem', color: 'var(--color-text-muted)' }}
-                        value=""
-                        onChange={(e) => {
-                          const id = e.target.value
-                          if (id) {
-                            handleQty(dateStr, meal.id, id, 1)
-                            e.target.value = ''
-                          }
+                        style={{
+                          width: '100%',
+                          maxWidth: 320,
+                          fontSize: '0.875rem',
+                          color: 'var(--color-text-muted)',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          border: '1px solid var(--color-border)',
+                          borderRadius: 6,
+                          background: 'var(--color-surface)',
+                          padding: '0.5rem 0.75rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '0.5rem',
+                        }}
+                        onClick={(e) => {
+                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                          setAddItemAnchor(rect)
+                          setOpenAddItemKey(`${dateStr}-${meal.id}`)
                         }}
                       >
-                        <option value="">Choose an item to add…</option>
-                        {unselectedItems.map((item: MenuItem) => (
-                          <option key={item._id} value={item._id}>{item.name}</option>
-                        ))}
-                      </select>
+                        <span>Add an item…</span>
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          style={{ flexShrink: 0, color: 'var(--color-text-muted)' }}
+                          aria-hidden
+                        >
+                          <path d="M6 9l6 6 6-6" />
+                        </svg>
+                      </button>
                     </div>
                   )}
                 </Card>
               )
             })}
             </div>
+            </div>
+            )}
           </div>
-        ))}
+          )
+        })}
       </div>
       <Button onClick={handleSaveWeek} disabled={saving} style={{ marginTop: '1rem' }}>
         {saving ? 'Saving…' : 'Save my week'}
       </Button>
+      {openAddItemKey != null && addItemAnchor != null && (() => {
+        const dateStr = openAddItemKey.slice(0, 10)
+        const mealId = openAddItemKey.slice(11) as MealType
+        const allMealItems = menuByMeal[mealId] ?? []
+        const unselectedItems = allMealItems.filter(
+          (item: MenuItem) => (quantities[qtyKey(dateStr, mealId, item._id)] ?? 0) === 0
+        )
+        const search = addItemSearch[openAddItemKey] ?? ''
+        const filtered = [...unselectedItems]
+          .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+          .filter((item) =>
+            search.trim() === '' ? true : item.name.toLowerCase().includes(search.toLowerCase())
+          )
+        return (
+          <div
+            ref={addItemPopoverRef}
+            style={{
+              position: 'fixed',
+              top: addItemAnchor.bottom + 6,
+              left: addItemAnchor.left,
+              minWidth: addItemAnchor.width,
+              maxWidth: 320,
+              zIndex: 1000,
+              padding: '0.5rem',
+              border: '1px solid var(--color-border)',
+              borderRadius: 8,
+              background: 'var(--color-surface)',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            }}
+          >
+            <input
+              type="text"
+              className="input"
+              placeholder="Search items…"
+              value={search}
+              onChange={(e) => setAddItemSearch((prev) => ({ ...prev, [openAddItemKey]: e.target.value }))}
+              style={{ width: '100%', fontSize: '0.875rem', marginBottom: '0.5rem' }}
+              autoFocus
+            />
+            <ul
+              style={{
+                listStyle: 'none',
+                padding: 0,
+                margin: 0,
+                maxHeight: 200,
+                overflowY: 'auto',
+              }}
+            >
+              {filtered.map((item: MenuItem) => (
+                <li key={item._id}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{
+                      width: '100%',
+                      justifyContent: 'flex-start',
+                      textAlign: 'left',
+                      fontSize: '0.875rem',
+                      padding: '0.5rem 0.75rem',
+                    }}
+                    onClick={() => {
+                      handleQty(dateStr, mealId, item._id, 1)
+                      closeAddItemPopover()
+                      setAddItemSearch((prev) => {
+                        const next = { ...prev }
+                        delete next[openAddItemKey]
+                        return next
+                      })
+                    }}
+                  >
+                    {item.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      })()}
     </Card>
   )
 }
