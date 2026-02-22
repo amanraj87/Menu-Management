@@ -215,24 +215,24 @@ export function PersonWeekView() {
   if (menuLoading || weekLoading) return <Loader />
 
   return (
-    <Card className="person-week-card" title="My week — choose meals for each day">
-      <p style={{ color: 'var(--color-text-muted)', marginBottom: '1rem', fontSize: '0.875rem' }}>
+    <Card className="content-card person-week-card" title="My week — choose meals for each day">
+      <p className="person-week-subtitle">
         Set your choices for each day of the week. You can edit any day and save once.
       </p>
-      <div style={{ marginBottom: '1rem', display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '0.75rem' }}>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.25rem' }}>Week of</label>
+      <div className="person-week-toolbar">
+        <div className="person-week-week-of-wrap">
+          <label className="person-week-week-of-label">Week of</label>
           <input
             type="date"
             value={weekOf}
             onChange={(e) => setWeekOf(e.target.value)}
-            className="input"
-            style={{ width: '100%', maxWidth: 200 }}
+            className="person-week-week-of-input input"
           />
         </div>
         <Button
           type="button"
           variant="secondary"
+          className="person-week-import-btn"
           onClick={handleImportFromLastWeek}
           disabled={importing}
         >

@@ -199,11 +199,190 @@ button.vendor-nav-btn {
   padding: 1rem;
   box-shadow: var(--shadow);
 }
+
+/* Shared content card look — same across View menu, Feedback, Dashboard, Users, Orders, Vendor, etc. */
+.content-card.card-ui {
+  background: #1c1c22;
+  border-color: #35353d;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+.content-card .card-title {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-weight: 600;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.content-card .content-subtitle {
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  font-family: 'Outfit', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.content-card .content-label {
+  display: block;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 0.35rem;
+  -webkit-font-smoothing: antialiased;
+}
+.content-card .input {
+  padding: 0.45rem 0.65rem;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 14px;
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  transition: border-color 0.2s, background 0.2s;
+  -webkit-font-smoothing: antialiased;
+}
+.content-card .input:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.content-card .input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15);
+}
+.content-card textarea.input {
+  resize: vertical;
+}
+.content-card .btn.btn-secondary,
+.content-card .btn.btn-outline {
+  padding: 0.45rem 0.85rem;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+  -webkit-font-smoothing: antialiased;
+}
+.content-card .btn.btn-secondary:hover:not(:disabled),
+.content-card .btn.btn-outline:hover:not(:disabled) {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.content-card section h3 {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: rgba(255, 255, 255, 0.7);
+  -webkit-font-smoothing: antialiased;
+}
+.content-card .table-wrap {
+  border-color: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+.content-card .table-ui th,
+.content-card .table-ui td {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.content-card .tabs-list {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.content-card .tabs-trigger {
+  font-family: 'Outfit', system-ui, sans-serif;
+  color: rgba(255, 255, 255, 0.6);
+}
+.content-card .tabs-trigger:hover {
+  color: var(--color-text);
+}
+.content-card .tabs-trigger-active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+.content-card .content-feedback-item {
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
 /* Person week page: card stands out clearly on dark background */
 .person-week-card.card-ui {
   background: #1c1c22;
   border-color: #35353d;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+/* Person week: toolbar (Week of + Import) — blend with card */
+.person-week-subtitle {
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  font-family: 'Outfit', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.person-week-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.person-week-week-of-label {
+  display: block;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 0.35rem;
+  -webkit-font-smoothing: antialiased;
+}
+.person-week-week-of-input {
+  width: 100%;
+  max-width: 200px;
+  padding: 0.45rem 0.65rem;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 14px;
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  transition: border-color 0.2s, background 0.2s;
+  -webkit-font-smoothing: antialiased;
+}
+.person-week-week-of-input:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.person-week-week-of-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15);
+}
+.person-week-import-btn.btn {
+  padding: 0.45rem 0.85rem;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+  -webkit-font-smoothing: antialiased;
+}
+.person-week-import-btn.btn:hover:not(:disabled) {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.person-week-import-btn.btn:disabled {
+  opacity: 0.5;
 }
 /* Person week: breakfast / lunch / dinner meal cards */
 .person-week-meal-card.card-ui {

@@ -105,13 +105,13 @@ export function AdminCombinedOrders() {
   const hasDisplayRows = displayRows.length > 0
 
   return (
-    <Card title="Combined orders — send to vendor">
-      <p style={{ color: 'var(--color-text-muted)', marginBottom: '1rem', fontSize: '0.875rem' }}>
+    <Card className="content-card" title="Combined orders — send to vendor">
+      <p className="content-subtitle">
         Select date and meal. See combined quantities and who chose what. Edit totals if needed, then send to vendor.
       </p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
         <div>
-          <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.25rem' }}>Date</label>
+          <label className="content-label">Date</label>
           <input
             type="date"
             value={date}
@@ -121,7 +121,7 @@ export function AdminCombinedOrders() {
           />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.25rem' }}>Meal</label>
+          <label className="content-label">Meal</label>
           <select
             value={meal}
             onChange={(e) => setMeal(e.target.value as MealType)}
@@ -136,10 +136,10 @@ export function AdminCombinedOrders() {
       </div>
       {!hasDisplayRows && items.length === 0 ? (
         <>
-          <p style={{ color: 'var(--color-text-muted)', marginBottom: '1rem' }}>No selections for this date and meal yet.</p>
+          <p className="content-subtitle" style={{ marginBottom: '1rem' }}>No selections for this date and meal yet.</p>
           {unselectedMenuItems.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '0.5rem', marginBottom: '1rem' }}>
-              <label className="input-label" style={{ display: 'block' }}>Add item</label>
+              <label className="content-label" style={{ display: 'block', width: '100%' }}>Add item</label>
               <select
                 value={addItemId}
                 onChange={(e) => setAddItemId(e.target.value)}
@@ -221,7 +221,7 @@ export function AdminCombinedOrders() {
           </Table>
           {unselectedMenuItems.length > 0 && (
             <div style={{ marginTop: '1rem', display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '0.5rem' }}>
-              <label className="input-label" style={{ display: 'block' }}>Add item</label>
+              <label className="content-label" style={{ display: 'block', width: '100%' }}>Add item</label>
               <select
                 value={addItemId}
                 onChange={(e) => setAddItemId(e.target.value)}

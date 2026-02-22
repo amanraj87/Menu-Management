@@ -18,7 +18,7 @@ export function ViewMenu() {
   const content = isLoading ? (
     <Loader />
   ) : items.length === 0 ? (
-    <p style={{ color: 'var(--color-text-muted)' }}>No menu items for this meal yet.</p>
+    <p className="content-subtitle" style={{ marginBottom: 0 }}>No menu items for this meal yet.</p>
   ) : (
     <Table>
       <Thead>
@@ -47,8 +47,8 @@ export function ViewMenu() {
   }))
 
   return (
-    <Card title="Menu (read-only)">
-      <p style={{ color: 'var(--color-text-muted)', marginBottom: '1rem', fontSize: '0.875rem' }}>
+    <Card className="content-card" title="Menu (read-only)">
+      <p className="content-subtitle">
         View menu items. Only vendor can add or edit the menu.
       </p>
       <Tabs tabs={tabs} activeId={mealTab} onSelect={(id) => setMealTab(id as MealType)} />

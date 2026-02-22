@@ -171,20 +171,20 @@ export function AdminDashboard() {
 
   return (
     <>
-      <Card title="Dashboard">
-        <p style={{ color: 'var(--color-text-muted)', marginBottom: '1rem', fontSize: '0.875rem' }}>
+      <Card className="content-card" title="Dashboard">
+        <p className="content-subtitle">
           Overview for admin tasks.
         </p>
 
         <section style={{ marginBottom: '1.5rem' }}>
-          <h3 style={{ fontSize: '0.9375rem', marginBottom: '0.5rem', fontWeight: 600 }}>Today</h3>
+          <h3>Today</h3>
           <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
             {today} · {todayMealsCount} meal order{todayMealsCount !== 1 ? 's' : ''} confirmed for today
           </p>
         </section>
 
         <section style={{ marginBottom: '1.5rem' }}>
-          <h3 style={{ fontSize: '0.9375rem', marginBottom: '0.5rem', fontWeight: 600 }}>Expenses</h3>
+          <h3>Expenses</h3>
           <div style={{ display: 'grid', gap: '1.25rem', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
             <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem', background: 'var(--color-surface)' }}>
               <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Today</h4>
@@ -250,7 +250,7 @@ export function AdminDashboard() {
         </section>
 
         <section style={{ marginBottom: '1.5rem' }}>
-          <h3 style={{ fontSize: '0.9375rem', marginBottom: '0.5rem', fontWeight: 600 }}>Summary</h3>
+          <h3>Summary</h3>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
             <li style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
               <strong style={{ color: 'var(--color-text)' }}>{users.length}</strong> users
