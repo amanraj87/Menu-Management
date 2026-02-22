@@ -162,6 +162,21 @@ button.vendor-nav-btn {
 }
 .input-qty::-webkit-outer-spin-button,
 .input-qty::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+/* Person week: smaller quantity controls and styled number */
+.person-week-qty-controls .btn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 0.35rem;
+  font-size: 0.875rem;
+}
+.person-week-qty-input.input-qty {
+  padding: 0.25rem 0.35rem;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
 .input-error-text { font-size: 0.8125rem; color: var(--color-danger); }
 
 /* Link (button that looks like a link) */
@@ -192,7 +207,7 @@ button.vendor-nav-btn {
 }
 /* Person week: breakfast / lunch / dinner meal cards */
 .person-week-meal-card.card-ui {
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   background: rgba(255, 255, 255, 0.03);
   border-color: var(--color-border);
 }
@@ -200,13 +215,70 @@ button.vendor-nav-btn {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--color-text-muted);
 }
+.person-week-meal-item-name {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeSpeed;
+}
 .person-week-meal-card-header svg {
   flex-shrink: 0;
+}
+/* Add an item: blends with meal card, subtle and cool */
+.person-week-add-item-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 0.3rem 0.5rem;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-align: left;
+  cursor: pointer;
+  border: 1px dashed var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+.person-week-add-item-btn:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
+  background: var(--color-secondary);
+}
+.person-week-add-item-btn svg {
+  flex-shrink: 0;
+}
+/* Add item popup list: scrollbar = only a thin line, no track box or arrows */
+.person-week-add-item-popup-list {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+.person-week-add-item-popup-list::-webkit-scrollbar {
+  width: 5px;
+}
+.person-week-add-item-popup-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.person-week-add-item-popup-list::-webkit-scrollbar-button {
+  display: none;
+}
+.person-week-add-item-popup-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+}
+.person-week-add-item-popup-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
 }
 .card-title { margin: 0 0 0.75rem; font-size: 1.125rem; }
 
@@ -286,31 +358,64 @@ button.vendor-nav-btn {
 .navbar-end { }
 
 /* Sidebar */
-.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 40; }
+.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; backdrop-filter: blur(2px); }
 .sidebar {
   position: fixed; top: 0; left: 0; bottom: 0;
   width: var(--sidebar-width);
-  background: var(--color-surface);
-  border-right: 1px solid var(--color-border);
+  background: linear-gradient(180deg, #1a1a1f 0%, #141418 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
   z-index: 50;
   transform: translateX(-100%);
-  transition: transform 0.2s;
+  transition: transform 0.25s ease;
 }
 .sidebar-open { transform: translateX(0); }
 @media (min-width: 768px) { .sidebar { transform: translateX(0); } .sidebar-overlay { display: none !important; } }
 @media (max-width: 767px) { .sidebar-overlay { display: block; } }
-.sidebar-header { padding: 1rem; border-bottom: 1px solid var(--color-border); }
-.sidebar-menu { list-style: none; margin: 0; padding: 0.5rem 0; }
-.sidebar-link {
-  display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  color: var(--color-text-muted);
-  text-decoration: none;
-  border-left: 3px solid transparent;
+.sidebar-header {
+  padding: 1.25rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeSpeed;
 }
-.sidebar-link:hover { background: var(--color-bg); color: var(--color-text); }
-.sidebar-link-active { color: var(--color-primary); border-left-color: var(--color-primary); background: rgba(34,197,94,0.08); }
-.sidebar-icon { }
+.sidebar-menu { list-style: none; margin: 0; padding: 0.5rem 0.5rem 0.5rem 0; }
+.sidebar-link {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.65rem 1rem;
+  margin-bottom: 2px;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  text-decoration: none;
+  border-radius: 0 8px 8px 0;
+  border-left: 3px solid transparent;
+  transition: color 0.2s ease, background 0.2s ease, border-left-color 0.2s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeSpeed;
+}
+.sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text);
+}
+.sidebar-link-active {
+  color: var(--color-primary);
+  border-left-color: var(--color-primary);
+  background: rgba(34, 197, 94, 0.1);
+}
+.sidebar-link-active:hover {
+  background: rgba(34, 197, 94, 0.14);
+  color: var(--color-primary);
+}
+.sidebar-icon { opacity: 0.85; }
+.sidebar-link-active .sidebar-icon { opacity: 1; }
 
 /* Loader */
 .loader-wrap { display: flex; align-items: center; justify-content: center; padding: 2rem; }
