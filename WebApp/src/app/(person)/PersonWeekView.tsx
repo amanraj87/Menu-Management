@@ -323,15 +323,15 @@ export function PersonWeekView() {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
-                            padding: '0.6rem 0',
+                            padding: '0.25rem 0',
                             borderBottom: '1px solid var(--color-border)',
                           }}
                         >
-                          <span style={{ fontSize: '0.9375rem' }}>{item.name}</span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <span className="person-week-meal-item-name">{item.name}</span>
+                          <div className="person-week-qty-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                             <button
                               type="button"
-                              className="btn btn-ghost btn-sm"
+                              className="btn btn-ghost"
                               aria-label="Decrease"
                               onClick={() =>
                                 handleQty(
@@ -353,12 +353,12 @@ export function PersonWeekView() {
                               value={draftQty[qtyKey(dateStr, meal.id, item._id)] ?? quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0}
                               onChange={(e) => setDraftQty((prev) => ({ ...prev, [qtyKey(dateStr, meal.id, item._id)]: e.target.value }))}
                               onBlur={() => commitDraft(qtyKey(dateStr, meal.id, item._id))}
-                              className="input input-qty"
-                              style={{ width: 56, minWidth: 56, textAlign: 'center' }}
+                              className="input input-qty person-week-qty-input"
+                              style={{ width: 44, minWidth: 44, textAlign: 'center' }}
                             />
                             <button
                               type="button"
-                              className="btn btn-ghost btn-sm"
+                              className="btn btn-ghost"
                               aria-label="Increase"
                               onClick={() =>
                                 handleQty(dateStr, meal.id, item._id, (quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0) + 1)
@@ -372,26 +372,10 @@ export function PersonWeekView() {
                     </ul>
                   )}
                   {unselectedItems.length > 0 && (
-                    <div style={{ marginTop: '1rem' }}>
+                    <div style={{ marginTop: '0.35rem', display: 'flex', justifyContent: 'flex-end' }}>
                       <button
                         type="button"
-                        className="input"
-                        style={{
-                          width: '100%',
-                          maxWidth: 320,
-                          fontSize: '0.875rem',
-                          color: 'var(--color-text-muted)',
-                          textAlign: 'left',
-                          cursor: 'pointer',
-                          border: '1px solid var(--color-border)',
-                          borderRadius: 6,
-                          background: 'var(--color-surface)',
-                          padding: '0.5rem 0.75rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '0.5rem',
-                        }}
+                        className="person-week-add-item-btn"
                         onClick={(e) => {
                           const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
                           setAddItemAnchor(rect)
@@ -399,18 +383,7 @@ export function PersonWeekView() {
                         }}
                       >
                         <span>Add an item…</span>
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          style={{ flexShrink: 0, color: 'var(--color-text-muted)' }}
-                          aria-hidden
-                        >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                           <path d="M6 9l6 6 6-6" />
                         </svg>
                       </button>
@@ -469,6 +442,7 @@ export function PersonWeekView() {
               autoFocus
             />
             <ul
+              className="person-week-add-item-popup-list"
               style={{
                 listStyle: 'none',
                 padding: 0,
