@@ -1,4 +1,5 @@
-import { Outlet, useNavigate, NavLink, Link } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Outlet, useNavigate, NavLink } from 'react-router-dom'
 import { Layout, Header } from '@/shared/ui'
 import { useUIStore } from '@/shared/stores/uiStore'
 import { LiveUpdateBanner } from '@/features/vendor/LiveUpdateBanner'
@@ -12,10 +13,22 @@ const vendorNav = [
 
 export function VendorLayout() {
   const userSession = useUIStore((s) => s.userSession)
+  const setUserSession = useUIStore((s) => s.setUserSession)
   const navigate = useNavigate()
-  if (!userSession?.userId) {
+  const isUnauthorized = !userSession?.userId || userSession.role !== 'vendor'
+
+  useEffect(() => {
+    if (isUnauthorized) {
+      setUserSession(null)
+      navigate('/', { replace: true })
+    }
+  }, [isUnauthorized, setUserSession, navigate])
+
+  if (isUnauthorized) return null
+
+  const signOut = () => {
+    setUserSession(null)
     navigate('/', { replace: true })
-    return null
   }
   return (
     <Layout>
@@ -35,9 +48,9 @@ export function VendorLayout() {
                 {item.label}
               </NavLink>
             ))}
-            <Link to="/admin" className="vendor-nav-btn vendor-nav-btn-admin">
-              Admin
-            </Link>
+            <button type="button" className="vendor-nav-btn" onClick={signOut}>
+              Sign out
+            </button>
           </nav>
         }
       />

@@ -10,6 +10,7 @@ import { AdminCombinedOrders } from '@/app/(admin)/AdminCombinedOrders'
 import { AdminFeedback } from '@/app/(admin)/AdminFeedback'
 import { AdminUsers } from '@/app/(admin)/AdminUsers'
 import { PersonWeekView } from '@/app/(person)/PersonWeekView'
+import { PersonTodayView } from '@/app/(person)/PersonTodayView'
 import { PersonFeedback } from '@/app/(person)/PersonFeedback'
 import { ViewMenu } from '@/app/shared/ViewMenu'
 import { VendorMenuManager } from '@/app/(vendor)/VendorMenuManager'
@@ -32,6 +33,7 @@ export const router = createBrowserRouter([
         element: <PersonLayout />,
         children: [
           { index: true, element: <Navigate to="/person/week" replace /> },
+          { path: 'today', element: <PersonTodayView /> },
           { path: 'week', element: <PersonWeekView /> },
           { path: 'menu', element: <ViewMenu /> },
           { path: 'feedback', element: <PersonFeedback /> },
