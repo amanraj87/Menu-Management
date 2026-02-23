@@ -1,9 +1,10 @@
+import { useEffect } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { Layout, Sidebar, Header } from '@/shared/ui'
 import { useUIStore } from '@/shared/stores/uiStore'
-import { Button } from '@/shared/ui'
 
 const personNav = [
+  { to: '/person/today', label: "Today's meals" },
   { to: '/person/week', label: 'My week' },
   { to: '/person/menu', label: 'View menu' },
   { to: '/person/feedback', label: 'Feedback and suggestion' },
@@ -11,10 +12,22 @@ const personNav = [
 
 export function PersonLayout() {
   const { sidebarOpen, toggleSidebar, userSession } = useUIStore()
+  const setUserSession = useUIStore((s) => s.setUserSession)
   const navigate = useNavigate()
-  if (!userSession?.userId) {
+  const isUnauthorized = !userSession?.userId || userSession.role !== 'person'
+
+  useEffect(() => {
+    if (isUnauthorized) {
+      setUserSession(null)
+      navigate('/', { replace: true })
+    }
+  }, [isUnauthorized, setUserSession, navigate])
+
+  if (isUnauthorized) return null
+
+  const signOut = () => {
+    setUserSession(null)
     navigate('/', { replace: true })
-    return null
   }
   return (
     <Layout>
@@ -28,9 +41,14 @@ export function PersonLayout() {
         <Header
           title="My meals"
           actions={
-            <Button variant="ghost" size="sm" onClick={toggleSidebar} className="md:hidden">
-              Menu
-            </Button>
+            <nav className="vendor-nav">
+              <button type="button" className="vendor-nav-btn md:hidden" onClick={toggleSidebar}>
+                Menu
+              </button>
+              <button type="button" className="vendor-nav-btn" onClick={signOut}>
+                Sign out
+              </button>
+            </nav>
           }
         />
         <main style={{ padding: '1.25rem', flex: 1 }}>

@@ -1,11 +1,10 @@
+import { useEffect } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { Layout, Sidebar, Header } from '@/shared/ui'
 import { useUIStore } from '@/shared/stores/uiStore'
-import { Link } from 'react-router-dom'
 
 const adminNav = [
   { to: '/admin', label: 'Dashboard' },
-  { to: '/admin/week', label: 'My week' },
   { to: '/admin/users', label: 'Users & vendors' },
   { to: '/admin/orders', label: 'Combined orders' },
   { to: '/admin/feedback', label: 'Feedback & suggestions' },
@@ -16,10 +15,17 @@ export function AdminLayout() {
   const { sidebarOpen, toggleSidebar, userSession } = useUIStore()
   const setUserSession = useUIStore((s) => s.setUserSession)
   const navigate = useNavigate()
-  if (!userSession?.userId) {
-    navigate('/', { replace: true })
-    return null
-  }
+  const isUnauthorized = !userSession?.userId || userSession.role !== 'admin'
+
+  useEffect(() => {
+    if (isUnauthorized) {
+      setUserSession(null)
+      navigate('/', { replace: true })
+    }
+  }, [isUnauthorized, setUserSession, navigate])
+
+  if (isUnauthorized) return null
+
   const signOut = () => { setUserSession(null); navigate('/', { replace: true }) }
   return (
     <Layout>
@@ -37,7 +43,6 @@ export function AdminLayout() {
               <button type="button" className="vendor-nav-btn md:hidden" onClick={toggleSidebar}>
                 Menu
               </button>
-              <Link to="/vendor" className="vendor-nav-btn">Vendor</Link>
               <button type="button" className="vendor-nav-btn" onClick={signOut}>Sign out</button>
             </nav>
           }
