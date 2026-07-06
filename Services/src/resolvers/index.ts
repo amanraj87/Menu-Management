@@ -21,6 +21,7 @@ export const resolvers = {
   },
   Mutation: {
     signUp: users.signUp,
+    resetPassword: users.resetPassword,
     createUser: users.createUser,
     createMenuItem: menuItems.createMenuItem,
     updateMenuItem: menuItems.updateMenuItem,

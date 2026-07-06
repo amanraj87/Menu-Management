@@ -1,0 +1,195 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { gqlRequest } from './client';
+import {
+  USERS,
+  MENU_ITEMS,
+  MY_SELECTIONS_FOR_WEEK,
+  AGGREGATED_ORDER,
+  CONFIRMED_ORDERS,
+  FEEDBACKS_FOR_ADMIN,
+  CONFIRMED_FEEDBACKS,
+} from './operations';
+import type {
+  AggregatedOrder,
+  ConfirmedOrder,
+  Feedback,
+  MealType,
+  MenuItem,
+  Selection,
+  User,
+} from '../types';
+
+/* ------------------------------------------------------------------ */
+/* Generic query hook                                                  */
+/* ------------------------------------------------------------------ */
+
+export interface QueryState<T> {
+  data: T | null;
+  loading: boolean;
+  error: Error | null;
+  refetch: () => Promise<void>;
+}
+
+export function useGqlQuery<T>(
+  query: string,
+  variables?: Record<string, unknown>,
+  options?: { skip?: boolean },
+): QueryState<T> {
+  const skip = options?.skip ?? false;
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState<boolean>(!skip);
+  const [error, setError] = useState<Error | null>(null);
+  const varsKey = JSON.stringify(variables ?? {});
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const run = useCallback(async () => {
+    if (skip) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await gqlRequest<T>(query, JSON.parse(varsKey));
+      if (mounted.current) {
+        setData(result);
+        setError(null);
+      }
+    } catch (e) {
+      if (mounted.current) setError(e as Error);
+    } finally {
+      if (mounted.current) setLoading(false);
+    }
+  }, [query, varsKey, skip]);
+
+  useEffect(() => {
+    run();
+  }, [run]);
+
+  return { data, loading, error, refetch: run };
+}
+
+/* ------------------------------------------------------------------ */
+/* Mutation helper                                                     */
+/* ------------------------------------------------------------------ */
+
+export function useMutation<TVars extends Record<string, unknown>, TData = any>(
+  document: string,
+) {
+  const [loading, setLoading] = useState(false);
+  const mutate = useCallback(
+    async (variables?: TVars): Promise<TData> => {
+      setLoading(true);
+      try {
+        return await gqlRequest<TData>(document, variables);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [document],
+  );
+  return { mutate, loading };
+}
+
+/* ------------------------------------------------------------------ */
+/* Mappers (GraphQL id -> _id)                                         */
+/* ------------------------------------------------------------------ */
+
+const toUser = (g: any): User => ({
+  _id: g.id,
+  name: g.name,
+  email: g.email,
+  role: g.role,
+  createdAt: g.createdAt ?? undefined,
+});
+
+const toMenuItem = (g: any): MenuItem => ({
+  _id: g.id,
+  name: g.name,
+  mealType: g.mealType,
+  unit: g.unit,
+  pricePerUnit: g.pricePerUnit ?? undefined,
+  createdAt: g.createdAt ?? undefined,
+  updatedAt: g.updatedAt ?? undefined,
+});
+
+const toFeedback = (g: any): Feedback => ({
+  _id: g.id,
+  userId: g.userId,
+  userName: g.userName,
+  text: g.text,
+  status: g.status,
+  createdAt: g.createdAt,
+  confirmedAt: g.confirmedAt ?? undefined,
+});
+
+/* ------------------------------------------------------------------ */
+/* Typed data hooks                                                    */
+/* ------------------------------------------------------------------ */
+
+export function useUsers() {
+  const q = useGqlQuery<{ users: any[] }>(USERS);
+  return { users: (q.data?.users ?? []).map(toUser), ...q };
+}
+
+export function useMenuItems(mealType?: MealType) {
+  const q = useGqlQuery<{ menuItems: any[] }>(
+    MENU_ITEMS,
+    mealType ? { mealType } : {},
+  );
+  return { items: (q.data?.menuItems ?? []).map(toMenuItem), ...q };
+}
+
+export function useMySelectionsForWeek(startDate: string) {
+  const q = useGqlQuery<{ mySelectionsForWeek: any[] }>(
+    MY_SELECTIONS_FOR_WEEK,
+    { startDate },
+    { skip: !startDate },
+  );
+  const selections: Selection[] = (q.data?.mySelectionsForWeek ?? []).map(
+    (s: any) => ({ date: s.date, mealType: s.mealType, items: s.items }),
+  );
+  return { selections, ...q };
+}
+
+export function useAggregatedOrder(date: string, mealType: MealType) {
+  const q = useGqlQuery<{ aggregatedOrder: AggregatedOrder | null }>(
+    AGGREGATED_ORDER,
+    { date, mealType },
+    { skip: !date || !mealType },
+  );
+  const aggregated: AggregatedOrder = q.data?.aggregatedOrder ?? {
+    date,
+    mealType,
+    items: [],
+  };
+  return { aggregated, ...q };
+}
+
+export function useConfirmedOrders(date: string) {
+  const q = useGqlQuery<{ confirmedOrders: any[] }>(
+    CONFIRMED_ORDERS,
+    { date },
+    { skip: !date },
+  );
+  const orders: ConfirmedOrder[] = (q.data?.confirmedOrders ?? []).map(
+    (o: any) => ({ ...o, _id: o.id }),
+  );
+  return { orders, ...q };
+}
+
+export function useFeedbacksForAdmin() {
+  const q = useGqlQuery<{ feedbacksForAdmin: any[] }>(FEEDBACKS_FOR_ADMIN);
+  return { feedbacks: (q.data?.feedbacksForAdmin ?? []).map(toFeedback), ...q };
+}
+
+export function useConfirmedFeedbacks() {
+  const q = useGqlQuery<{ confirmedFeedbacks: any[] }>(CONFIRMED_FEEDBACKS);
+  return { feedbacks: (q.data?.confirmedFeedbacks ?? []).map(toFeedback), ...q };
+}
