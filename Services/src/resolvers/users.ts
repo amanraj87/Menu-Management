@@ -81,6 +81,26 @@ export async function signUp(
   return toUser(inserted)!
 }
 
+export async function resetPassword(
+  _: unknown,
+  args: { email: string; newPasswordHash: string }
+): Promise<boolean> {
+  const db = getDb()
+  const email = args.email.trim().toLowerCase()
+  const newPassword = args.newPasswordHash
+  if (!newPassword || newPassword.trim().length < 4) {
+    throw new Error('Password must be at least 4 characters')
+  }
+  const doc = await db.collection(COLLECTIONS.users).findOne({ email }) as UserDoc | null
+  if (!doc) throw new Error('User not found')
+  const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS)
+  await db.collection(COLLECTIONS.users).updateOne(
+    { _id: doc._id },
+    { $set: { passwordHash, updatedAt: new Date() } }
+  )
+  return true
+}
+
 export async function createUser(
   _: unknown,
   args: { input: { name: string; email: string; role: 'person' | 'admin' | 'vendor' } },

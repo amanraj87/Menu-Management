@@ -160,6 +160,8 @@ export const typeDefs = `#graphql
   # Mutations
   type Mutation {
     signUp(input: SignUpInput!): User!
+    """Reset a user's password by email (self-service; no email verification)."""
+    resetPassword(email: String!, newPasswordHash: String!): Boolean!
     createUser(input: CreateUserInput!): User!
     createMenuItem(input: CreateMenuItemInput!): MenuItem!
     updateMenuItem(id: ID!, input: UpdateMenuItemInput!): MenuItem!

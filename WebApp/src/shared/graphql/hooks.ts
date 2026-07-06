@@ -3,6 +3,7 @@ import {
   ME,
   LOGIN,
   SIGN_UP,
+  RESET_PASSWORD,
   USERS,
   CREATE_USER,
   MENU_ITEMS,
@@ -55,6 +56,19 @@ export function useSignUp(onSuccess?: (user: { _id: string; name: string; role: 
   })
   return {
     signUp: (input: { name: string; email: string; passwordHash: string }) => mutate({ variables: { input } }),
+    isPending: result.loading,
+    error: result.error,
+  }
+}
+
+export function useResetPassword(onSuccess?: () => void, onError?: (e: Error) => void) {
+  const [mutate, result] = useMutation<{ resetPassword: boolean }>(RESET_PASSWORD, {
+    onCompleted: () => onSuccess?.(),
+    onError: (e: Error) => onError?.(e),
+  })
+  return {
+    resetPassword: (email: string, newPasswordHash: string) =>
+      mutate({ variables: { email, newPasswordHash } }),
     isPending: result.loading,
     error: result.error,
   }

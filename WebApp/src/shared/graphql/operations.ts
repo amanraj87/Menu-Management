@@ -33,6 +33,12 @@ export const SIGN_UP = gql`
   }
 `
 
+export const RESET_PASSWORD = gql`
+  mutation ResetPassword($email: String!, $newPasswordHash: String!) {
+    resetPassword(email: $email, newPasswordHash: $newPasswordHash)
+  }
+`
+
 export const USERS = gql`
   query Users {
     users {
