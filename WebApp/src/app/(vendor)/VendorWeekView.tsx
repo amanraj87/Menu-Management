@@ -13,18 +13,24 @@ function addDays(date: Date, n: number) {
   return out
 }
 
+function prettyDate(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  return dt.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
+}
+
 function MealBlock({ title, items }: { title: string; items: { name: string; quantity: number; unit: string }[] }) {
   return (
-    <div style={{ marginBottom: '1rem' }}>
-      <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.9375rem', color: 'var(--color-text-muted)' }}>{title}</h3>
+    <div style={{ flex: '1 1 200px', minWidth: 0, background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '0.75rem' }}>
+      <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.8125rem', fontWeight: 600, letterSpacing: '0.03em', color: 'var(--color-text-muted)' }}>{title}</h3>
       {items.length === 0 ? (
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.8125rem' }}>No order confirmed.</p>
+        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.8125rem', margin: 0 }}>No order confirmed.</p>
       ) : (
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {items.map((item) => (
-            <li key={item.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0', borderBottom: '1px solid var(--color-border)', fontSize: '0.875rem' }}>
+            <li key={item.name} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', padding: '0.35rem 0', borderBottom: '1px solid var(--color-border)', fontSize: '0.875rem' }}>
               <span>{item.name}</span>
-              <span>{item.quantity} {item.unit}</span>
+              <span style={{ whiteSpace: 'nowrap', color: 'var(--color-text-muted)' }}>{item.quantity} {item.unit}</span>
             </li>
           ))}
         </ul>
@@ -65,15 +71,17 @@ export function VendorWeekView() {
         <p className="content-subtitle">
           Confirmed orders for the next 7 days. Admin must confirm orders for each date for them to appear.
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {dates.map((dateStr, i) => {
             const byMeal = ordersToByMeal(allOrders[i])
             return (
               <div key={dateStr} style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem', background: 'var(--color-surface)' }}>
-                <h2 style={{ margin: '0 0 0.75rem', fontSize: '1rem', color: 'var(--color-text)' }}>{dateStr}</h2>
-                {MEALS.map((meal) => (
-                  <MealBlock key={meal} title={meal.toUpperCase()} items={byMeal[meal] ?? []} />
-                ))}
+                <h2 style={{ margin: '0 0 0.75rem', fontSize: '1rem', color: 'var(--color-text)' }}>{prettyDate(dateStr)}</h2>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+                  {MEALS.map((meal) => (
+                    <MealBlock key={meal} title={meal.toUpperCase()} items={byMeal[meal] ?? []} />
+                  ))}
+                </div>
               </div>
             )
           })}
