@@ -265,8 +265,35 @@ export function Stepper({
   step?: number;
   min?: number;
 }) {
+  // Local draft so partial input like "0." or "0.2" can be typed without the
+  // parent committing an intermediate value (which could drop the item at 0).
+  const [draft, setDraft] = React.useState(String(value));
+  React.useEffect(() => {
+    setDraft(String(value));
+  }, [value]);
+
   const dec = () => onChange(Math.max(min, round(value - step)));
   const inc = () => onChange(round(value + step));
+
+  const handleText = (t: string) => {
+    // keep only digits and a single decimal point
+    const cleaned = t.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+    setDraft(cleaned);
+    const n = parseFloat(cleaned);
+    if (!isNaN(n) && n > 0) onChange(round(n));
+  };
+
+  const commit = () => {
+    const n = parseFloat(draft);
+    if (isNaN(n) || n <= 0) {
+      setDraft(String(value)); // revert invalid/empty input
+    } else {
+      const r = round(n);
+      setDraft(String(r));
+      onChange(r);
+    }
+  };
+
   return (
     <View style={styles.stepper}>
       <Pressable
@@ -279,7 +306,17 @@ export function Stepper({
           −
         </Text>
       </Pressable>
-      <Text style={styles.stepValue}>{formatQty(value)}</Text>
+      <TextInput
+        style={styles.stepValue}
+        value={draft}
+        onChangeText={handleText}
+        onEndEditing={commit}
+        onBlur={commit}
+        keyboardType="decimal-pad"
+        selectTextOnFocus
+        returnKeyType="done"
+        maxLength={6}
+      />
       <Pressable onPress={inc} style={styles.stepBtn} hitSlop={6}>
         <Text style={styles.stepBtnText}>+</Text>
       </Pressable>
@@ -459,8 +496,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: font.body,
     fontWeight: '700',
-    minWidth: 26,
+    minWidth: 46,
     textAlign: 'center',
+    paddingVertical: 0,
+    paddingHorizontal: 2,
   },
 
   loader: { paddingVertical: spacing.xxl, alignItems: 'center' },
