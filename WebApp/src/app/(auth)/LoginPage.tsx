@@ -113,12 +113,12 @@ export function LoginPage() {
 
   const isPending = loginPending || signUpPending || resetPending
 
-  const title = isReset ? 'Reset password' : isSignUp ? 'Sign up' : 'Sign in'
+  const title = isReset ? 'Reset password' : isSignUp ? 'Create your account' : 'Welcome back'
   const description = isReset
     ? 'Enter your email and choose a new password.'
     : isSignUp
-    ? 'Create an account. You will be able to choose meals as a person.'
-    : 'Sign in with your email and passwordHash.'
+    ? 'Sign up to start choosing your meals.'
+    : 'Sign in with your email and password.'
   const submitLabel = isReset
     ? (isPending ? 'Updating…' : 'Update password')
     : isSignUp
@@ -126,10 +126,18 @@ export function LoginPage() {
     : (isPending ? 'Signing in…' : 'Sign in')
 
   return (
-    <Card className="login-card" title={title}>
-      <p style={{ color: 'var(--color-text-muted)', marginBottom: '1.5rem' }}>
-        {description}
-      </p>
+    <>
+      <div className="auth-brand">
+        <div className="auth-logo">
+          <span className="auth-logo-icon" role="img" aria-label="FoodOs">🍽️</span>
+        </div>
+        <h1 className="auth-brand-name">FoodOs</h1>
+        <p className="auth-tagline">Plan meals. Combine orders. Feed everyone.</p>
+      </div>
+      <Card className="login-card" title={title}>
+        <p style={{ color: 'var(--color-text-muted)', marginBottom: '1.5rem' }}>
+          {description}
+        </p>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
         {isSignUp && (
           <Input
@@ -240,13 +248,14 @@ export function LoginPage() {
           </>
         ) : (
           <>
-            New user?{' '}
+            New here?{' '}
             <button type="button" className="link" onClick={() => switchMode('signup')}>
-              Sign up
+              Create an account
             </button>
           </>
         )}
       </p>
-    </Card>
+      </Card>
+    </>
   )
 }

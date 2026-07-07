@@ -143,7 +143,7 @@ export function LoginScreen() {
             <View style={styles.logo}>
               <Text style={styles.logoIcon}>🍽️</Text>
             </View>
-            <Text style={styles.brandName}>FoodOps</Text>
+            <Text style={styles.brandName}>FoodOs</Text>
             <Text style={styles.brandTagline}>Plan meals. Combine orders. Feed everyone.</Text>
           </View>
 
