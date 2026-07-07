@@ -15,10 +15,10 @@ import { Sheet } from '../../ui/Sheet';
 import { SignOutButton } from '../../ui/SignOutButton';
 import { useAggregatedOrder, useMenuItems } from '../../api/hooks';
 import { gqlRequest } from '../../api/client';
-import { CONFIRM_ORDER_WITH_ITEMS } from '../../api/operations';
+import { AGGREGATED_ORDER, CONFIRM_ORDER_WITH_ITEMS } from '../../api/operations';
 import { useToast } from '../../context/ToastContext';
 import { colors, font, mealMeta, radius, spacing } from '../../theme';
-import { addDays, formatShort, isToday, todayISO } from '../../utils/date';
+import { addDays, formatShort, isToday, todayISO, weekDays, weekStart } from '../../utils/date';
 import { MEAL_TYPES, type MealType, type PersonBreakdownItem } from '../../types';
 
 interface EditableItem {
@@ -38,6 +38,10 @@ export function AdminOrdersScreen() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [confirming, setConfirming] = useState(false);
+
+  const [wkStart, setWkStart] = useState(() => weekStart(todayISO()));
+  const [weekConfirming, setWeekConfirming] = useState(false);
+  const [weekProgress, setWeekProgress] = useState('');
 
   const { aggregated, loading, refetch } = useAggregatedOrder(date, meal);
   const menu = useMenuItems(meal);
@@ -111,12 +115,103 @@ export function AdminOrdersScreen() {
       .filter(i => !q || i.name.toLowerCase().includes(q));
   }, [menu.items, items, search]);
 
+  /** Confirm every day's breakfast/lunch/dinner for the selected week, using
+   *  each meal's aggregated selections as-is. Meals with no selections are skipped. */
+  const handleConfirmWeek = async () => {
+    const days = weekDays(wkStart);
+    const combos = days.flatMap(d => MEAL_TYPES.map(m => ({ date: d, meal: m })));
+    setWeekConfirming(true);
+    setWeekProgress('');
+    let confirmed = 0;
+    let skipped = 0;
+    let done = 0;
+    try {
+      for (const { date: d, meal: m } of combos) {
+        const res = await gqlRequest<{ aggregatedOrder: { items: EditableItem[] } | null }>(
+          AGGREGATED_ORDER,
+          { date: d, mealType: m },
+        );
+        const aggItems = res.aggregatedOrder?.items ?? [];
+        if (aggItems.length === 0) {
+          skipped++;
+        } else {
+          await gqlRequest(CONFIRM_ORDER_WITH_ITEMS, {
+            date: d,
+            mealType: m,
+            items: aggItems.map(i => ({
+              menuItemId: i.menuItemId,
+              name: i.name,
+              unit: i.unit,
+              quantity: i.quantity,
+            })),
+          });
+          confirmed++;
+        }
+        done++;
+        setWeekProgress(`Processing ${done}/${combos.length}…`);
+      }
+      toast.show(
+        confirmed > 0
+          ? `Confirmed ${confirmed} meal${confirmed === 1 ? '' : 's'} for the week (${skipped} had no selections).`
+          : 'No selections found for any meal this week.',
+        confirmed > 0 ? 'success' : 'info',
+      );
+      refetch();
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setWeekConfirming(false);
+      setWeekProgress('');
+    }
+  };
+
   return (
     <Screen
       title="Combine orders"
       headerRight={<SignOutButton />}
       refreshing={loading}
       onRefresh={refetch}>
+      {/* Confirm the whole week at once */}
+      <Card title="Confirm the whole week">
+        <Text style={styles.weekHint}>
+          Confirm every day's breakfast, lunch and dinner for a week at once, using what people
+          selected. Meals with no selections are skipped.
+        </Text>
+        <View style={styles.weekNav}>
+          <Pressable
+            style={styles.navBtn}
+            onPress={() => setWkStart(addDays(wkStart, -7))}
+            hitSlop={8}>
+            <Text style={styles.navBtnText}>‹</Text>
+          </Pressable>
+          <View style={styles.dateLabelWrap}>
+            <Text style={styles.dateLabel}>
+              {formatShort(wkStart)} – {formatShort(addDays(wkStart, 6))}
+            </Text>
+            {weekProgress ? (
+              <Text style={styles.todayLink}>{weekProgress}</Text>
+            ) : (
+              <Text style={styles.todayBadge}>Mon–Sun</Text>
+            )}
+          </View>
+          <Pressable
+            style={styles.navBtn}
+            onPress={() => setWkStart(addDays(wkStart, 7))}
+            hitSlop={8}>
+            <Text style={styles.navBtnText}>›</Text>
+          </Pressable>
+        </View>
+        <Button
+          title="Confirm all meals for the week"
+          icon="✓"
+          onPress={handleConfirmWeek}
+          loading={weekConfirming}
+          fullWidth
+        />
+      </Card>
+
+      <SectionLabel>Or review &amp; edit a single meal</SectionLabel>
+
       {/* Date nav */}
       <View style={styles.dateNav}>
         <Pressable
@@ -271,6 +366,18 @@ export function AdminOrdersScreen() {
 
 const styles = StyleSheet.create({
   flex1: { flex: 1 },
+  weekHint: {
+    color: colors.textMuted,
+    fontSize: font.small,
+    lineHeight: 19,
+    marginBottom: spacing.md,
+  },
+  weekNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
   dateNav: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   navBtn: {
     width: 40,

@@ -17,10 +17,11 @@ interface SheetProps {
   onClose: () => void;
   title?: string;
   children: React.ReactNode;
+  maxHeightPct?: number;
 }
 
 /** Bottom sheet modal used for forms (add user, add menu item, add item, etc.). */
-export function Sheet({ visible, onClose, title, children }: SheetProps) {
+export function Sheet({ visible, onClose, title, children, maxHeightPct = 88 }: SheetProps) {
   const insets = useSafeAreaInsets();
   return (
     <Modal
@@ -33,7 +34,11 @@ export function Sheet({ visible, onClose, title, children }: SheetProps) {
         <Pressable style={styles.backdropTouch} onPress={onClose} />
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+          <View
+            style={[
+              styles.sheet,
+              { paddingBottom: insets.bottom + spacing.lg, maxHeight: `${maxHeightPct}%` },
+            ]}>
             <View style={styles.handle} />
             {title ? (
               <View style={styles.header}>

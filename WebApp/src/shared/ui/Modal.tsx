@@ -8,9 +8,10 @@ interface ModalProps {
   title?: string
   children: ReactNode
   footer?: ReactNode
+  wide?: boolean
 }
 
-export function Modal({ open, onClose, title, children, footer }: ModalProps) {
+export function Modal({ open, onClose, title, children, footer, wide }: ModalProps) {
   useEffect(() => {
     if (!open) return
     const handleEscape = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -26,7 +27,7 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
 
   return (
     <div className="modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby={title ? 'modal-title' : undefined}>
-      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+      <div className={`modal-box${wide ? ' modal-box-wide' : ''}`} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           {title && <h2 id="modal-title" className="modal-title">{title}</h2>}
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close">&times;</button>
