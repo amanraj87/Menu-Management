@@ -23,16 +23,16 @@ const UNIT_OPTIONS = ['portion', 'piece', 'kg', 'plate', 'bowl']
 /** A distinct dish in the shared menu, plus which meals it is currently served in. */
 type CatalogDish = { name: string; unit: string; pricePerUnit?: number; meals: MealType[] }
 
-type ActiveTab = 'menu' | MealType
-
 export function VendorMenuManager() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('menu')
+  const [activeTab, setActiveTab] = useState<MealType>('breakfast')
   const [modalOpen, setModalOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [editing, setEditing] = useState<MenuItem | null>(null)
   const [formName, setFormName] = useState('')
   const [formMealType, setFormMealType] = useState<MealType>('breakfast')
   const [formUnit, setFormUnit] = useState('portion')
   const [formPricePerUnit, setFormPricePerUnit] = useState('')
+  const [priceDraft, setPriceDraft] = useState<Record<string, string>>({})
   const toast = useToastStore()
 
   function resetForm() {
@@ -50,6 +50,11 @@ export function VendorMenuManager() {
   )
   const { updateMenuItem, isPending: updatePending } = useUpdateMenuItem(
     () => { setModalOpen(false); setEditing(null); resetForm(); toast.add('Item updated.', 'success') },
+    (e) => toast.add(e.message, 'error')
+  )
+  // Separate instance for inline price edits in the Full-menu popup (no modal close).
+  const { updateMenuItem: updatePrice } = useUpdateMenuItem(
+    () => toast.add('Price saved.', 'success'),
     (e) => toast.add(e.message, 'error')
   )
   const { deleteMenuItem, isPending: deletePending } = useDeleteMenuItem(
@@ -79,11 +84,10 @@ export function VendorMenuManager() {
     setModalOpen(true)
   }
 
-  const openAddNewDish = () => {
+  const openMenu = () => {
     resetForm()
-    setFormMealType('breakfast')
-    setEditing(null)
-    setModalOpen(true)
+    setPriceDraft({})
+    setMenuOpen(true)
   }
 
   const openEdit = (item: MenuItem) => {
@@ -109,20 +113,38 @@ export function VendorMenuManager() {
     setFormPricePerUnit(dish.pricePerUnit != null ? String(dish.pricePerUnit) : '')
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  const submitForm = (): boolean => {
     const name = formName.trim()
-    if (!name) { toast.add('Enter a dish name.', 'warning'); return }
+    if (!name) { toast.add('Enter a dish name.', 'warning'); return false }
     const price = formPricePerUnit.trim() === '' ? undefined : Number(formPricePerUnit)
+    if (price !== undefined && (Number.isNaN(price) || price < 0)) { toast.add('Price must be a number.', 'warning'); return false }
     if (editing) {
       updateMenuItem(editing._id, { name, mealType: formMealType, unit: formUnit, pricePerUnit: price })
-    } else {
-      const dup = allItems.some(
-        (i) => i.mealType === formMealType && i.name.trim().toLowerCase() === name.toLowerCase()
-      )
-      if (dup) { toast.add(`"${name}" is already in ${MEAL_LABEL[formMealType]}.`, 'warning'); return }
-      createMenuItem({ name, mealType: formMealType, unit: formUnit, pricePerUnit: price })
+      return true
     }
+    const dup = allItems.some(
+      (i) => i.mealType === formMealType && i.name.trim().toLowerCase() === name.toLowerCase()
+    )
+    if (dup) { toast.add(`"${name}" is already in ${MEAL_LABEL[formMealType]}.`, 'warning'); return false }
+    createMenuItem({ name, mealType: formMealType, unit: formUnit, pricePerUnit: price })
+    return true
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    submitForm()
+  }
+
+  const commitPrice = (item: MenuItem) => {
+    const raw = priceDraft[item._id]
+    if (raw === undefined) return
+    setPriceDraft((prev) => { const next = { ...prev }; delete next[item._id]; return next })
+    const trimmed = raw.trim()
+    if (trimmed === '') return // leave blank prices unchanged
+    const price = Number(trimmed)
+    if (Number.isNaN(price) || price < 0) { toast.add('Price must be a number.', 'warning'); return }
+    if (price === (item.pricePerUnit ?? null)) return // unchanged
+    updatePrice(item._id, { name: item.name, mealType: item.mealType, unit: item.unit, pricePerUnit: price })
   }
 
   const renderMealTab = (meal: MealType) => {
@@ -131,7 +153,7 @@ export function VendorMenuManager() {
       <>
         {itemsForMeal.length === 0 ? (
           <p className="content-subtitle" style={{ margin: '0.5rem 0 1rem' }}>
-            No items in {MEAL_LABEL[meal]} yet. Add one from the shared menu below.
+            No items in {MEAL_LABEL[meal]} yet. Add one below.
           </p>
         ) : (
           <Table>
@@ -175,80 +197,33 @@ export function VendorMenuManager() {
     )
   }
 
-  const renderMenuTab = () => (
-    <>
-      <p className="content-subtitle" style={{ margin: '0.5rem 0 1rem' }}>
-        Every dish across all meals. The same dish can be served in more than one meal — add it to a
-        meal from its tab and pick it here.
-      </p>
-      {catalog.length === 0 ? (
-        <p className="content-subtitle">No dishes yet. Add your first dish below.</p>
-      ) : (
-        <Table>
-          <Thead>
-            <Tr>
-              <Th>Dish</Th>
-              <Th>Unit</Th>
-              <Th>Price per unit</Th>
-              <Th>Served in</Th>
-            </Tr>
-          </Thead>
-          <Tbody>
-            {catalog.map((dish) => (
-              <Tr key={dish.name}>
-                <Td>{dish.name}</Td>
-                <Td>{dish.unit}</Td>
-                <Td>{dish.pricePerUnit != null ? dish.pricePerUnit : '—'}</Td>
-                <Td>
-                  <span style={{ display: 'inline-flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                    {MEALS.filter((m) => dish.meals.includes(m.id)).map((m) => (
-                      <span
-                        key={m.id}
-                        style={{
-                          fontSize: '0.75rem',
-                          padding: '0.1rem 0.5rem',
-                          borderRadius: 999,
-                          background: 'var(--color-primary-soft, rgba(34,197,94,0.14))',
-                          color: 'var(--color-primary)',
-                        }}
-                      >
-                        {m.label}
-                      </span>
-                    ))}
-                  </span>
-                </Td>
-              </Tr>
-            ))}
-          </Tbody>
-        </Table>
-      )}
-      <Button variant="outline" onClick={openAddNewDish} style={{ marginTop: '1rem' }}>
-        + Add new dish
-      </Button>
-    </>
-  )
-
-  const tabs: TabItem[] = [
-    { id: 'menu', label: 'Menu', content: activeTab === 'menu' ? renderMenuTab() : <div /> },
-    ...MEALS.map((m) => ({
-      id: m.id,
-      label: m.label,
-      content: activeTab === m.id ? renderMealTab(m.id) : <div />,
-    })),
-  ]
+  const tabs: TabItem[] = MEALS.map((m) => ({
+    id: m.id,
+    label: m.label,
+    content: activeTab === m.id ? renderMealTab(m.id) : <div />,
+  }))
 
   return (
-    <Card className="content-card" title="Update menu">
-      <p className="content-subtitle">
-        The <strong>Menu</strong> tab shows every dish. Add dishes to Breakfast, Lunch or Dinner —
-        the same dish can be reused across meals.
-      </p>
-      {isLoading ? (
-        <Loader />
-      ) : (
-        <Tabs tabs={tabs} activeId={activeTab} onSelect={(id) => setActiveTab(id as ActiveTab)} />
-      )}
+    <Card className="content-card">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
+        <div>
+          <h3 className="card-title" style={{ marginTop: 0 }}>Update menu</h3>
+          <p className="content-subtitle" style={{ margin: 0 }}>
+            Add dishes to Breakfast, Lunch or Dinner. The same dish can be reused across meals.
+          </p>
+        </div>
+        <Button variant="outline" onClick={openMenu}>📖 Full menu</Button>
+      </div>
 
+      <div style={{ marginTop: '1rem' }}>
+        {isLoading ? (
+          <Loader />
+        ) : (
+          <Tabs tabs={tabs} activeId={activeTab} onSelect={(id) => setActiveTab(id as MealType)} />
+        )}
+      </div>
+
+      {/* Add / edit a single item (from a meal tab) */}
       <Modal
         open={modalOpen}
         onClose={() => { setModalOpen(false); setEditing(null); resetForm(); }}
@@ -328,6 +303,132 @@ export function VendorMenuManager() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Full menu popup: whole menu, editable prices, add a dish */}
+      <Modal open={menuOpen} onClose={() => setMenuOpen(false)} title="Full menu" footer={null}>
+        <form
+          onSubmit={(e) => { e.preventDefault(); submitForm() }}
+          style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem' }}
+        >
+          <strong style={{ fontSize: '0.9375rem' }}>Add a dish</strong>
+          <div>
+            <label className="input-label">Choose from menu</label>
+            <select
+              value=""
+              onChange={(e) => { if (e.target.value) applyDishFromMenu(e.target.value) }}
+              className="input"
+              style={{ width: '100%' }}
+            >
+              <option value="">
+                {pickableForMeal.length > 0 ? 'Reuse an existing dish…' : 'No other dishes yet'}
+              </option>
+              {pickableForMeal.map((d) => (
+                <option key={d.name} value={d.name}>
+                  {d.name}{d.pricePerUnit != null ? ` — ${d.pricePerUnit}/${d.unit}` : ` (${d.unit})`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Input
+            label="Name"
+            value={formName}
+            onChange={(e) => setFormName(e.target.value)}
+            placeholder="e.g. Chicken Biryani"
+          />
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 120 }}>
+              <label className="input-label">Meal</label>
+              <select
+                value={formMealType}
+                onChange={(e) => setFormMealType(e.target.value as MealType)}
+                className="input"
+                style={{ width: '100%' }}
+              >
+                {MEALS.map((m) => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ flex: 1, minWidth: 120 }}>
+              <label className="input-label">Unit</label>
+              <select
+                value={formUnit}
+                onChange={(e) => setFormUnit(e.target.value)}
+                className="input"
+                style={{ width: '100%' }}
+              >
+                {UNIT_OPTIONS.map((u) => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ width: 110 }}>
+              <Input
+                label="Price"
+                type="number"
+                min={0}
+                step={0.01}
+                value={formPricePerUnit}
+                onChange={(e) => setFormPricePerUnit(e.target.value)}
+                placeholder="e.g. 50"
+              />
+            </div>
+          </div>
+          <div>
+            <Button type="submit" disabled={createPending}>+ Add dish</Button>
+          </div>
+        </form>
+
+        <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '1rem' }}>
+          {allItems.length === 0 ? (
+            <p className="content-subtitle" style={{ margin: 0 }}>No dishes yet. Add your first one above.</p>
+          ) : (
+            MEALS.map((m) => {
+              const rows = allItems.filter((i) => i.mealType === m.id)
+              return (
+                <div key={m.id} style={{ marginBottom: '1.25rem' }}>
+                  <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.9375rem', color: 'var(--color-text)' }}>{m.label}</h4>
+                  {rows.length === 0 ? (
+                    <p className="content-subtitle" style={{ margin: 0, fontSize: '0.8125rem' }}>No items.</p>
+                  ) : (
+                    rows.map((item) => (
+                      <div
+                        key={item._id}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.4rem 0', borderBottom: '1px solid var(--color-border)' }}
+                      >
+                        <span style={{ flex: 1 }}>
+                          {item.name}{' '}
+                          <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8125rem' }}>({item.unit})</span>
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.01}
+                          className="input input-qty"
+                          style={{ width: 90, textAlign: 'center' }}
+                          placeholder="price"
+                          aria-label={`Price for ${item.name} (${m.label})`}
+                          value={priceDraft[item._id] ?? (item.pricePerUnit != null ? String(item.pricePerUnit) : '')}
+                          onChange={(e) => setPriceDraft((prev) => ({ ...prev, [item._id]: e.target.value }))}
+                          onBlur={() => commitPrice(item)}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => deleteMenuItem(item._id)}
+                          disabled={deletePending}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )
+            })
+          )}
+        </div>
       </Modal>
     </Card>
   )
