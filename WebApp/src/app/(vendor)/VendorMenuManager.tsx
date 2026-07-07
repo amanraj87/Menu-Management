@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
+import { useApolloClient } from '@apollo/client/react'
 import { Card, Tabs, Table, Thead, Tbody, Tr, Th, Td, Button, Modal, Input, Loader } from '@/shared/ui'
 import type { TabItem } from '@/shared/ui'
 import type { MealType } from '@/shared/types'
 import type { MenuItem } from '@/shared/types'
 import { useMenuItems, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem } from '@/shared/graphql/hooks'
+import { UPDATE_MENU_ITEM, DELETE_MENU_ITEM, MENU_ITEMS } from '@/shared/graphql/operations'
 import { useToastStore } from '@/shared/stores/toastStore'
 
 const MEALS: { id: MealType; label: string }[] = [
@@ -20,8 +22,15 @@ const MEAL_LABEL: Record<MealType, string> = {
 
 const UNIT_OPTIONS = ['portion', 'piece', 'kg', 'plate', 'bowl']
 
-/** A distinct dish in the shared menu, plus which meals it is currently served in. */
-type CatalogDish = { name: string; unit: string; pricePerUnit?: number; meals: MealType[] }
+/** A distinct dish in the shared menu, the meals it is served in, and the
+ *  underlying per-meal MenuItem records (one dish can span several meals). */
+type CatalogDish = {
+  name: string
+  unit: string
+  pricePerUnit?: number
+  meals: MealType[]
+  items: MenuItem[]
+}
 
 function MealPill({ meal }: { meal: MealType }) {
   return (
@@ -45,12 +54,17 @@ export function VendorMenuManager() {
   const [modalOpen, setModalOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuFormOpen, setMenuFormOpen] = useState(false)
-  const [editing, setEditing] = useState<MenuItem | null>(null)
+  const [editing, setEditing] = useState<MenuItem | null>(null)         // per-meal single-record edit
+  const [editingDish, setEditingDish] = useState<CatalogDish | null>(null) // full-menu dish edit (all meals)
   const [formName, setFormName] = useState('')
   const [formMealType, setFormMealType] = useState<MealType>('breakfast')
   const [formUnit, setFormUnit] = useState('portion')
   const [formPricePerUnit, setFormPricePerUnit] = useState('')
+  const [menuSearch, setMenuSearch] = useState('')
+  const [addSearch, setAddSearch] = useState('')
+  const [dishBusy, setDishBusy] = useState(false)
   const toast = useToastStore()
+  const client = useApolloClient()
 
   function resetForm() {
     setFormName('')
@@ -58,53 +72,74 @@ export function VendorMenuManager() {
     setFormUnit('portion')
     setFormPricePerUnit('')
     setEditing(null)
+    setEditingDish(null)
   }
 
   const { items: allItems, isLoading } = useMenuItems()
   const { createMenuItem, isPending: createPending } = useCreateMenuItem(
-    () => { setModalOpen(false); setMenuFormOpen(false); resetForm(); toast.add('Item added.', 'success') },
+    () => { setMenuFormOpen(false); resetForm(); toast.add('Item added.', 'success') },
     (e) => toast.add(e.message, 'error')
   )
   const { updateMenuItem, isPending: updatePending } = useUpdateMenuItem(
-    () => { setModalOpen(false); setMenuFormOpen(false); setEditing(null); resetForm(); toast.add('Item updated.', 'success') },
+    () => { setModalOpen(false); resetForm(); toast.add('Item updated.', 'success') },
     (e) => toast.add(e.message, 'error')
   )
   const { deleteMenuItem, isPending: deletePending } = useDeleteMenuItem(
     () => toast.add('Item removed.', 'success'),
     (e) => toast.add(e.message, 'error')
   )
+  // Adds an existing dish to a meal from the picker (keeps the modal open for more).
+  const { createMenuItem: addExistingToMeal, isPending: addingExisting } = useCreateMenuItem(
+    () => toast.add('Added.', 'success'),
+    (e) => toast.add(e.message, 'error')
+  )
 
-  // Shared menu = all distinct dishes (by name), with the meals they appear in.
+  // Shared menu = distinct dishes (by name), each with its meals + records.
   const catalog: CatalogDish[] = useMemo(() => {
     const map = new Map<string, CatalogDish>()
     for (const it of allItems) {
       const key = it.name.trim().toLowerCase()
       const existing = map.get(key)
       if (existing) {
+        existing.items.push(it)
         if (!existing.meals.includes(it.mealType)) existing.meals.push(it.mealType)
       } else {
-        map.set(key, { name: it.name, unit: it.unit, pricePerUnit: it.pricePerUnit, meals: [it.mealType] })
+        map.set(key, { name: it.name, unit: it.unit, pricePerUnit: it.pricePerUnit, meals: [it.mealType], items: [it] })
       }
+    }
+    for (const d of map.values()) {
+      d.meals.sort((a, b) => MEALS.findIndex((m) => m.id === a) - MEALS.findIndex((m) => m.id === b))
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
   }, [allItems])
 
-  // Flat, alphabetical list of every menu item for the full-menu popup.
-  const allItemsSorted = useMemo(
-    () => [...allItems].sort((a, b) => a.name.localeCompare(b.name) || a.mealType.localeCompare(b.mealType)),
-    [allItems]
-  )
+  const menuFiltered = useMemo(() => {
+    const q = menuSearch.trim().toLowerCase()
+    return q ? catalog.filter((d) => d.name.toLowerCase().includes(q)) : catalog
+  }, [catalog, menuSearch])
+
+  // Units suggested in the type-ahead: the defaults plus any already in use.
+  const unitOptions = useMemo(() => {
+    const set = new Set<string>(UNIT_OPTIONS)
+    allItems.forEach((i) => { if (i.unit) set.add(i.unit) })
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [allItems])
 
   const openAddForMeal = (meal: MealType) => {
     resetForm()
     setFormMealType(meal)
-    setEditing(null)
+    setAddSearch('')
     setModalOpen(true)
+  }
+
+  const addDishToMeal = (dish: CatalogDish) => {
+    addExistingToMeal({ name: dish.name, mealType: formMealType, unit: dish.unit, pricePerUnit: dish.pricePerUnit })
   }
 
   const openMenu = () => {
     resetForm()
     setMenuFormOpen(false)
+    setMenuSearch('')
     setMenuOpen(true)
   }
 
@@ -113,16 +148,17 @@ export function VendorMenuManager() {
     setMenuFormOpen(true)
   }
 
-  const openEditInMenu = (item: MenuItem) => {
-    setEditing(item)
-    setFormName(item.name)
-    setFormMealType(item.mealType)
-    setFormUnit(item.unit)
-    setFormPricePerUnit(item.pricePerUnit != null ? String(item.pricePerUnit) : '')
+  const openEditDish = (dish: CatalogDish) => {
+    setEditing(null)
+    setEditingDish(dish)
+    setFormName(dish.name)
+    setFormUnit(dish.unit)
+    setFormPricePerUnit(dish.pricePerUnit != null ? String(dish.pricePerUnit) : '')
     setMenuFormOpen(true)
   }
 
   const openEdit = (item: MenuItem) => {
+    setEditingDish(null)
     setEditing(item)
     setFormName(item.name)
     setFormMealType(item.mealType)
@@ -131,43 +167,91 @@ export function VendorMenuManager() {
     setModalOpen(true)
   }
 
-  // Dishes from the shared menu that are NOT yet in the meal being added to (per-meal modal).
+  // Dishes NOT yet in the meal being added to (per-meal picker).
   const pickableForMeal = useMemo(
     () => catalog.filter((d) => !d.meals.includes(formMealType)),
     [catalog, formMealType]
   )
+  const addQuery = addSearch.trim().toLowerCase()
+  const pickList = addQuery
+    ? pickableForMeal.filter((d) => d.name.toLowerCase().includes(addQuery))
+    : pickableForMeal
 
-  const applyDishFromMenu = (name: string) => {
-    const dish = catalog.find((d) => d.name === name)
-    if (!dish) return
-    setFormName(dish.name)
-    setFormUnit(dish.unit)
-    setFormPricePerUnit(dish.pricePerUnit != null ? String(dish.pricePerUnit) : '')
+  const parsePrice = (): number | undefined | null => {
+    const t = formPricePerUnit.trim()
+    if (t === '') return undefined
+    const v = Number(t)
+    if (Number.isNaN(v) || v < 0) return null // invalid
+    return v
   }
 
-  const submitForm = () => {
+  // Per-meal single-record edit (from a meal tab)
+  const submitEdit = (e: React.FormEvent) => {
+    e.preventDefault()
     const name = formName.trim()
     if (!name) { toast.add('Enter a dish name.', 'warning'); return }
-    const price = formPricePerUnit.trim() === '' ? undefined : Number(formPricePerUnit)
-    if (price !== undefined && (Number.isNaN(price) || price < 0)) { toast.add('Price must be a number.', 'warning'); return }
-    if (editing) {
-      updateMenuItem(editing._id, { name, mealType: formMealType, unit: formUnit, pricePerUnit: price })
+    const price = parsePrice()
+    if (price === null) { toast.add('Price must be a number.', 'warning'); return }
+    const unit = formUnit.trim() || 'portion'
+    if (editing) updateMenuItem(editing._id, { name, mealType: formMealType, unit, pricePerUnit: price })
+  }
+
+  // Full-menu inline form: add a new dish, or edit a dish across all its meals.
+  const submitMenuForm = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const name = formName.trim()
+    if (!name) { toast.add('Enter a dish name.', 'warning'); return }
+    const price = parsePrice()
+    if (price === null) { toast.add('Price must be a number.', 'warning'); return }
+    const unit = formUnit.trim() || 'portion'
+
+    if (editingDish) {
+      setDishBusy(true)
+      try {
+        for (const rec of editingDish.items) {
+          await client.mutate({
+            mutation: UPDATE_MENU_ITEM,
+            variables: { id: rec._id, input: { name, mealType: rec.mealType, unit, pricePerUnit: price } },
+          })
+        }
+        await client.refetchQueries({ include: [MENU_ITEMS] })
+        toast.add('Dish updated.', 'success')
+        setMenuFormOpen(false)
+        resetForm()
+      } catch (err) {
+        toast.add((err as Error).message, 'error')
+      } finally {
+        setDishBusy(false)
+      }
       return
     }
+
     const dup = allItems.some(
       (i) => i.mealType === formMealType && i.name.trim().toLowerCase() === name.toLowerCase()
     )
     if (dup) { toast.add(`"${name}" is already in ${MEAL_LABEL[formMealType]}.`, 'warning'); return }
-    createMenuItem({ name, mealType: formMealType, unit: formUnit, pricePerUnit: price })
+    createMenuItem({ name, mealType: formMealType, unit, pricePerUnit: price })
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    submitForm()
+  const removeDish = async (dish: CatalogDish) => {
+    const where = dish.meals.map((m) => MEAL_LABEL[m]).join(', ')
+    if (!window.confirm(`Remove "${dish.name}" from ${where}?`)) return
+    setDishBusy(true)
+    try {
+      for (const rec of dish.items) {
+        await client.mutate({ mutation: DELETE_MENU_ITEM, variables: { id: rec._id } })
+      }
+      await client.refetchQueries({ include: [MENU_ITEMS] })
+      toast.add('Dish removed.', 'success')
+    } catch (err) {
+      toast.add((err as Error).message, 'error')
+    } finally {
+      setDishBusy(false)
+    }
   }
 
-  /** Name / meal / unit / price fields shared by both the per-meal modal and the popup. */
-  const formFields = (
+  /** Name / (optional meal) / unit / price fields. Unit is a type-ahead so any custom unit works. */
+  const renderFormFields = (showMeal: boolean) => (
     <>
       <Input
         label="Name"
@@ -177,31 +261,31 @@ export function VendorMenuManager() {
         required
       />
       <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 130 }}>
-          <label className="input-label">Meal</label>
-          <select
-            value={formMealType}
-            onChange={(e) => setFormMealType(e.target.value as MealType)}
-            className="input"
-            style={{ width: '100%' }}
-          >
-            {MEALS.map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
-          </select>
-        </div>
+        {showMeal && (
+          <div style={{ flex: 1, minWidth: 130 }}>
+            <label className="input-label">Meal</label>
+            <select
+              value={formMealType}
+              onChange={(e) => setFormMealType(e.target.value as MealType)}
+              className="input"
+              style={{ width: '100%' }}
+            >
+              {MEALS.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div style={{ flex: 1, minWidth: 130 }}>
           <label className="input-label">Unit</label>
-          <select
-            value={formUnit}
-            onChange={(e) => setFormUnit(e.target.value)}
+          <input
+            list="unit-options"
             className="input"
             style={{ width: '100%' }}
-          >
-            {UNIT_OPTIONS.map((u) => (
-              <option key={u} value={u}>{u}</option>
-            ))}
-          </select>
+            value={formUnit}
+            onChange={(e) => setFormUnit(e.target.value)}
+            placeholder="e.g. portion (type any)"
+          />
         </div>
         <div style={{ width: 130 }}>
           <label className="input-label">Price</label>
@@ -276,6 +360,12 @@ export function VendorMenuManager() {
 
   return (
     <Card className="content-card">
+      <datalist id="unit-options">
+        {unitOptions.map((u) => (
+          <option key={u} value={u} />
+        ))}
+      </datalist>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
           <h3 className="card-title" style={{ marginTop: 0 }}>Update menu</h3>
@@ -294,91 +384,133 @@ export function VendorMenuManager() {
         )}
       </div>
 
-      {/* Add / edit a single item (from a meal tab) */}
+      {/* Add (pick from menu) / edit a single item (from a meal tab) */}
       <Modal
         open={modalOpen}
-        onClose={() => { setModalOpen(false); setEditing(null); resetForm(); }}
+        onClose={() => { setModalOpen(false); resetForm(); }}
         title={editing ? 'Edit menu item' : `Add item to ${MEAL_LABEL[formMealType]}`}
         footer={null}
       >
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {!editing && (
-            <div>
-              <label className="input-label">Choose from menu</label>
-              <select
-                value=""
-                onChange={(e) => { if (e.target.value) applyDishFromMenu(e.target.value) }}
-                className="input"
-                style={{ width: '100%' }}
-              >
-                <option value="">
-                  {pickableForMeal.length > 0 ? 'Pick an existing dish…' : 'No other dishes yet'}
-                </option>
-                {pickableForMeal.map((d) => (
-                  <option key={d.name} value={d.name}>
-                    {d.name}{d.pricePerUnit != null ? ` — ${d.pricePerUnit}/${d.unit}` : ` (${d.unit})`}
-                  </option>
-                ))}
-              </select>
-              <p className="content-subtitle" style={{ margin: '0.35rem 0 0', fontSize: '0.8125rem' }}>
-                …or type a new dish below.
-              </p>
+        {editing ? (
+          <form onSubmit={submitEdit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {renderFormFields(true)}
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+              <Button type="button" variant="ghost" onClick={() => setModalOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={updatePending}>Update</Button>
             </div>
-          )}
-          {formFields}
-          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-            <Button type="button" variant="ghost" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={createPending || updatePending}>
-              {editing ? 'Update' : 'Add'}
-            </Button>
-          </div>
-        </form>
+          </form>
+        ) : catalog.length === 0 ? (
+          <p className="content-subtitle" style={{ margin: 0 }}>
+            Your menu is empty. Open <strong>Full menu → Add new dish</strong> to create dishes first,
+            then add them to meals here.
+          </p>
+        ) : (
+          <>
+            <p className="content-subtitle" style={{ marginTop: 0 }}>
+              Pick a dish from your menu to serve in {MEAL_LABEL[formMealType]}.
+            </p>
+            <Input
+              type="search"
+              value={addSearch}
+              onChange={(e) => setAddSearch(e.target.value)}
+              placeholder="Search dishes…"
+            />
+            {pickList.length === 0 ? (
+              <p className="content-subtitle" style={{ marginBottom: 0 }}>
+                {addQuery
+                  ? `No dishes match “${addSearch.trim()}”.`
+                  : `Every dish is already in ${MEAL_LABEL[formMealType]}.`}
+              </p>
+            ) : (
+              <div style={{ maxHeight: 320, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', marginTop: '0.25rem' }}>
+                {pickList.map((d, i) => (
+                  <button
+                    type="button"
+                    key={d.name}
+                    onClick={() => addDishToMeal(d)}
+                    disabled={addingExisting}
+                    style={{
+                      display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between',
+                      gap: '1rem', padding: '0.6rem 0.9rem', background: 'none', border: 'none',
+                      borderTop: i > 0 ? '1px solid var(--color-border)' : 'none', color: 'var(--color-text)',
+                      cursor: 'pointer', textAlign: 'left', font: 'inherit',
+                    }}
+                  >
+                    <span>
+                      {d.name}{' '}
+                      <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8125rem' }}>
+                        ({d.unit}{d.pricePerUnit != null ? ` · ${d.pricePerUnit}` : ''})
+                      </span>
+                    </span>
+                    <span style={{ color: 'var(--color-primary)', fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+              <Button variant="ghost" onClick={() => setModalOpen(false)}>Done</Button>
+            </div>
+          </>
+        )}
       </Modal>
 
-      {/* Full menu popup: flat list of every dish, add/edit inline */}
+      {/* Full menu popup: one row per dish (meal badges), add/edit inline */}
       <Modal open={menuOpen} onClose={() => { setMenuOpen(false); setMenuFormOpen(false); resetForm() }} title="Full menu" footer={null} wide>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
           <span className="content-subtitle" style={{ margin: 0 }}>
-            {allItemsSorted.length} {allItemsSorted.length === 1 ? 'dish' : 'dishes'}
+            {catalog.length} {catalog.length === 1 ? 'dish' : 'dishes'}
           </span>
           {!menuFormOpen && (
             <Button onClick={openAddInMenu}>+ Add new dish</Button>
           )}
         </div>
 
+        {catalog.length > 0 && (
+          <div style={{ marginBottom: '1rem' }}>
+            <Input
+              type="search"
+              value={menuSearch}
+              onChange={(e) => setMenuSearch(e.target.value)}
+              placeholder="Search dishes…"
+            />
+          </div>
+        )}
+
         {menuFormOpen && (
           <form
-            onSubmit={handleSubmit}
+            onSubmit={submitMenuForm}
             style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1rem',
-              padding: '1rem',
-              marginBottom: '1.25rem',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius)',
-              background: 'var(--color-bg)',
+              display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1rem',
+              marginBottom: '1.25rem', border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius)', background: 'var(--color-bg)',
             }}
           >
-            <strong style={{ fontSize: '0.9375rem' }}>{editing ? 'Edit dish' : 'Add a dish'}</strong>
-            {formFields}
+            <strong style={{ fontSize: '0.9375rem' }}>{editingDish ? `Edit “${editingDish.name}”` : 'Add a dish'}</strong>
+            {renderFormFields(!editingDish)}
+            {editingDish && (
+              <p className="content-subtitle" style={{ margin: 0, fontSize: '0.8125rem' }}>
+                Applies to: {editingDish.meals.map((m) => MEAL_LABEL[m]).join(', ')}
+              </p>
+            )}
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
               <Button type="button" variant="ghost" onClick={() => { setMenuFormOpen(false); resetForm() }}>Cancel</Button>
-              <Button type="submit" disabled={createPending || updatePending}>
-                {editing ? 'Save' : 'Add dish'}
+              <Button type="submit" disabled={createPending || dishBusy}>
+                {editingDish ? 'Save' : 'Add dish'}
               </Button>
             </div>
           </form>
         )}
 
-        {allItemsSorted.length === 0 ? (
+        {catalog.length === 0 ? (
           <p className="content-subtitle" style={{ margin: 0 }}>No dishes yet. Tap “Add new dish” to create one.</p>
+        ) : menuFiltered.length === 0 ? (
+          <p className="content-subtitle" style={{ margin: 0 }}>No dishes match “{menuSearch.trim()}”.</p>
         ) : (
           <Table>
             <Thead>
               <Tr>
                 <Th>Dish</Th>
-                <Th>Meal</Th>
+                <Th>Served in</Th>
                 <Th>Unit</Th>
                 <Th>Price</Th>
                 <Th aria-label="Edit" />
@@ -386,24 +518,21 @@ export function VendorMenuManager() {
               </Tr>
             </Thead>
             <Tbody>
-              {allItemsSorted.map((item) => (
-                <Tr key={item._id}>
-                  <Td>{item.name}</Td>
-                  <Td><MealPill meal={item.mealType} /></Td>
-                  <Td>{item.unit}</Td>
-                  <Td>{item.pricePerUnit != null ? item.pricePerUnit : '—'}</Td>
+              {menuFiltered.map((dish) => (
+                <Tr key={dish.name}>
+                  <Td>{dish.name}</Td>
                   <Td>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => openEditInMenu(item)}>Edit</button>
+                    <span style={{ display: 'inline-flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                      {dish.meals.map((m) => <MealPill key={m} meal={m} />)}
+                    </span>
+                  </Td>
+                  <Td>{dish.unit}</Td>
+                  <Td>{dish.pricePerUnit != null ? dish.pricePerUnit : '—'}</Td>
+                  <Td>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => openEditDish(dish)}>Edit</button>
                   </Td>
                   <Td>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => deleteMenuItem(item._id)}
-                      disabled={deletePending}
-                    >
-                      Remove
-                    </button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeDish(dish)} disabled={dishBusy}>Remove</button>
                   </Td>
                 </Tr>
               ))}
