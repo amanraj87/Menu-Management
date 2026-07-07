@@ -155,6 +155,14 @@ button.vendor-nav-btn {
 }
 .input:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 2px rgba(34,197,94,0.2); }
 .input-error { border-color: var(--color-danger); }
+/* Native <select> dropdown options inherit the light theme text color but the
+   opened list renders on the browser's default white background, making them
+   nearly invisible. Force readable dark-theme colors on the options. */
+select.input option,
+.input option {
+  background-color: #18181c;
+  color: #e4e4e7;
+}
 /* Hide number input spinner arrows; keep quantity box editable */
 .input-qty {
   -moz-appearance: textfield;
