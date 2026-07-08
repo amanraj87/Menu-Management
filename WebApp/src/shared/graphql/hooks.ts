@@ -355,7 +355,7 @@ export function useMyMealDoneForWeek(startDate: string) {
 
 export function useMarkMealDone() {
   const [mutate, { loading }] = useMutation(MARK_MEAL_DONE, {
-    refetchQueries: [MY_MEAL_DONE_FOR_WEEK],
+    refetchQueries: [MY_MEAL_DONE_FOR_WEEK, MEAL_DONE_STATUS],
   })
   return { mutate, loading }
 }

@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Screen } from '../../ui/Screen';
 import { Button, Card, EmptyState, Loader } from '../../ui';
 import { SignOutButton } from '../../ui/SignOutButton';
-import { useMenuItems, useMySelectionsForWeek, useMyMealDoneForWeek } from '../../api/hooks';
+import { useMenuItems, useMySelectionsForWeek, useMyMealDoneForWeek, useMealDoneStatus } from '../../api/hooks';
 import { gqlRequest } from '../../api/client';
 import { MARK_MEAL_DONE } from '../../api/operations';
 import { useSession } from '../../context/SessionContext';
@@ -23,6 +23,11 @@ export function PersonTodayScreen() {
   const menu = useMenuItems();
   const sel = useMySelectionsForWeek(start);
   const doneQuery = useMyMealDoneForWeek(start);
+  const doneStatus = {
+    breakfast: useMealDoneStatus(today, 'breakfast'),
+    lunch: useMealDoneStatus(today, 'lunch'),
+    dinner: useMealDoneStatus(today, 'dinner'),
+  };
   const [localDone, setLocalDone] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -49,6 +54,7 @@ export function PersonTodayScreen() {
         mealType: meal,
         done: newDone,
       });
+      doneStatus[meal].refetch();
     } catch (e) {
       setLocalDone(prev => {
         const next = new Set(prev);
@@ -65,6 +71,7 @@ export function PersonTodayScreen() {
     menu.refetch();
     sel.refetch();
     doneQuery.refetch();
+    MEAL_TYPES.forEach(m => doneStatus[m].refetch());
   };
 
   const itemMap = useMemo(() => {
@@ -113,6 +120,7 @@ export function PersonTodayScreen() {
           {MEAL_TYPES.map(meal => {
             const rows = todayByMeal[meal];
             const meta = mealMeta[meal];
+            const eaters = doneStatus[meal].doneUsers;
             return (
               <Card key={meal} padded={false}>
                 <View style={styles.mealHeader}>
@@ -136,6 +144,13 @@ export function PersonTodayScreen() {
                     </View>
                   ))
                 )}
+                {eaters.length > 0 ? (
+                  <View style={styles.eatenRow}>
+                    <Text style={styles.eatenText}>
+                      😋 Eaten by: {eaters.map(u => u.userName).join(', ')}
+                    </Text>
+                  </View>
+                ) : null}
               </Card>
             );
           })}
@@ -189,6 +204,13 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   itemName: { color: colors.text, fontSize: font.body, flex: 1 },
+  eatenRow: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  eatenText: { color: colors.textMuted, fontSize: font.small },
   itemQty: {
     color: colors.primary,
     fontSize: font.small,

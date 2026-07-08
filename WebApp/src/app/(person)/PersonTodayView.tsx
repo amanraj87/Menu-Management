@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Card, Loader } from '@/shared/ui'
 import type { MealType, MenuItem } from '@/shared/types'
-import { useMenuItems, useMySelectionsForWeek, useMyMealDoneForWeek, useMarkMealDone } from '@/shared/graphql/hooks'
+import { useMenuItems, useMySelectionsForWeek, useMyMealDoneForWeek, useMarkMealDone, useMealDoneStatus } from '@/shared/graphql/hooks'
 import { useToastStore } from '@/shared/stores/toastStore'
 import { Link } from 'react-router-dom'
 
@@ -38,6 +38,11 @@ export function PersonTodayView() {
   const { selections, isLoading: weekLoading } = useMySelectionsForWeek(startDate)
   const { doneList, isLoading: doneLoading } = useMyMealDoneForWeek(startDate)
   const { mutate: markDoneMutate } = useMarkMealDone()
+  const doneStatus = {
+    breakfast: useMealDoneStatus(today, 'breakfast'),
+    lunch: useMealDoneStatus(today, 'lunch'),
+    dinner: useMealDoneStatus(today, 'dinner'),
+  }
 
   const [localDone, setLocalDone] = useState<Set<string>>(new Set())
 
@@ -124,6 +129,11 @@ export function PersonTodayView() {
                     </li>
                   ))}
                 </ul>
+              )}
+              {doneStatus[mealType].doneUsers.length > 0 && (
+                <p style={{ margin: '0.5rem 0 0', paddingTop: '0.5rem', borderTop: '1px solid var(--color-border)', color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
+                  😋 Eaten by: {doneStatus[mealType].doneUsers.map((u) => u.userName).join(', ')}
+                </p>
               )}
             </section>
           )
