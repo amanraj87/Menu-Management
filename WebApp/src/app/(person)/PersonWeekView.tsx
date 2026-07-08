@@ -77,7 +77,7 @@ export function PersonWeekView() {
 
   const { items: allMenuItems, isLoading: menuLoading } = useMenuItems()
   const { selections, isLoading: weekLoading } = useMySelectionsForWeek(startDate)
-  const { optOuts, refetch: refetchOptOuts } = useMyMealOptOuts(startDate)
+  const { optOuts } = useMyMealOptOuts(startDate)
   const { mutate: toggleOptOutMutate } = useToggleMealOptOut()
   const { doneList } = useMyMealDoneForWeek(startDate)
   const { mutate: markDoneMutate } = useMarkMealDone()
