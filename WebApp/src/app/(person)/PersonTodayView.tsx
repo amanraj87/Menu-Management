@@ -68,7 +68,7 @@ export function PersonTodayView() {
         else next.delete(k)
         return next
       })
-      toast.show((e as Error).message, 'error')
+      toast.add((e as Error).message, 'error')
     }
   }
 

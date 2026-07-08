@@ -157,16 +157,6 @@ export function VendorMenuManager() {
     setMenuFormOpen(true)
   }
 
-  const openEdit = (item: MenuItem) => {
-    setEditingDish(null)
-    setEditing(item)
-    setFormName(item.name)
-    setFormMealType(item.mealType)
-    setFormUnit(item.unit)
-    setFormPricePerUnit(item.pricePerUnit != null ? String(item.pricePerUnit) : '')
-    setModalOpen(true)
-  }
-
   // Dishes NOT yet in the meal being added to (per-meal picker).
   const pickableForMeal = useMemo(
     () => catalog.filter((d) => !d.meals.includes(formMealType)),

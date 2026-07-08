@@ -76,7 +76,7 @@ export interface Feedback {
   userId: string
   userName: string
   text: string
-  status: 'pending' | 'confirmed'
+  status: 'pending' | 'confirmed' | 'rejected'
   createdAt: string
   confirmedAt?: string
 }
