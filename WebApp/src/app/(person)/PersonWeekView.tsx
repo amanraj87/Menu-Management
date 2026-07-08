@@ -252,6 +252,21 @@ export function PersonWeekView() {
     return out
   })()
 
+  // Total price for the visible week, from current (unsaved included) quantities.
+  const weekTotal = (() => {
+    let total = 0
+    for (const dateStr of weekDates) {
+      for (const meal of MEALS) {
+        if (isMealOptedOut(dateStr, meal.id)) continue
+        for (const item of menuByMeal[meal.id]) {
+          const qty = quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0
+          if (qty > 0 && item.pricePerUnit != null) total += qty * item.pricePerUnit
+        }
+      }
+    }
+    return total
+  })()
+
   if (menuLoading || weekLoading) return <Loader />
 
   return (
@@ -269,6 +284,20 @@ export function PersonWeekView() {
             className="person-week-week-of-input input"
           />
         </div>
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '0.4rem 0.9rem',
+            border: '1px solid var(--color-border)',
+            borderRadius: 8,
+            background: 'var(--color-surface)',
+            color: 'var(--color-primary)',
+            fontWeight: 700,
+          }}
+        >
+          ₹{weekTotal.toFixed(2).replace(/\.00$/, '')}
+        </span>
         <Button
           type="button"
           variant="secondary"

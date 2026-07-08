@@ -261,6 +261,18 @@ export function PersonWeekScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheetMeal, menu.items, search, quantities, activeDay]);
 
+  // Total price for the visible week, from current (unsaved included) quantities.
+  const weekTotal = useMemo(() => {
+    let total = 0;
+    for (const [k, qty] of Object.entries(quantities)) {
+      const [date, meal, itemId] = k.split('|');
+      if (localOptOuts.has(`${date}|${meal}`)) continue;
+      const price = itemMap.get(itemId)?.pricePerUnit;
+      if (price != null) total += price * qty;
+    }
+    return total;
+  }, [quantities, itemMap, localOptOuts]);
+
   const loading = menu.loading || sel.loading;
 
   return (
@@ -291,13 +303,20 @@ export function PersonWeekScreen() {
         </Pressable>
       </View>
 
-      <Button
-        title="Import from last week"
-        icon="↻"
-        variant="ghost"
-        loading={importing}
-        onPress={importLastWeek}
-      />
+      <View style={styles.totalRow}>
+        <View style={styles.totalCard}>
+          <Text style={styles.weekTotal}>₹{weekTotal.toFixed(2).replace(/\.00$/, '')}</Text>
+        </View>
+        <View style={styles.importCard}>
+          <Button
+            title="Import from last week"
+            icon="↻"
+            variant="ghost"
+            loading={importing}
+            onPress={importLastWeek}
+          />
+        </View>
+      </View>
 
       {/* Day strip */}
       <ScrollView
@@ -465,6 +484,29 @@ const styles = StyleSheet.create({
   navBtnText: { color: colors.primary, fontSize: 22, fontWeight: '700' },
   weekLabelWrap: { flex: 1, alignItems: 'center' },
   weekLabel: { color: colors.text, fontSize: font.body, fontWeight: '700' },
+  totalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  totalCard: {
+    paddingHorizontal: spacing.lg,
+    height: 40,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  importCard: {
+    flex: 1,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  weekTotal: { color: colors.primary, fontSize: font.body, fontWeight: '700' },
 
   dayStrip: { gap: spacing.sm, paddingVertical: spacing.xs },
   dayChip: {
