@@ -73,6 +73,15 @@ export const typeDefs = `#graphql
     mealType: MealType!
   }
 
+  type MealDone {
+    id: ID!
+    userId: ID!
+    userName: String!
+    date: String!
+    mealType: MealType!
+    markedAt: String!
+  }
+
   type Feedback {
     id: ID!
     userId: ID!
@@ -160,6 +169,10 @@ export const typeDefs = `#graphql
     confirmedOrders(date: String!): [ConfirmedOrder!]!
     """Meal opt-outs for 7 days starting at startDate, for current user."""
     myMealOptOuts(startDate: String!): [MealOptOut!]!
+    """Current user's meal-done marks for 7 days starting at startDate."""
+    myMealDoneForWeek(startDate: String!): [MealDone!]!
+    """Admin: all meal-done marks for a specific date and meal."""
+    mealDoneStatus(date: String!, mealType: MealType!): [MealDone!]!
     """Admin: all feedbacks (pending and confirmed)."""
     feedbacksForAdmin: [Feedback!]!
     """Vendor: only confirmed feedbacks."""
@@ -181,6 +194,8 @@ export const typeDefs = `#graphql
     confirmOrderWithItems(date: String!, mealType: MealType!, items: [ConfirmedOrderItemInput!]!): ConfirmedOrder!
     """Toggle a meal opt-out. optedOut=true inserts, false removes."""
     toggleMealOptOut(date: String!, mealType: MealType!, optedOut: Boolean!): Boolean!
+    """Mark a meal as done (eaten) or undo it."""
+    markMealDone(date: String!, mealType: MealType!, done: Boolean!): Boolean!
     createFeedback(input: CreateFeedbackInput!): Feedback!
     confirmFeedback(id: ID!): Feedback!
   }

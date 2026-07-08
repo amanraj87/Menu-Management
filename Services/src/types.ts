@@ -77,6 +77,14 @@ export interface MealOptOutDoc {
   createdAt: Date
 }
 
+export interface MealDoneDoc {
+  _id: ObjectId
+  userId: ObjectId
+  date: string
+  mealType: MealType
+  markedAt: Date
+}
+
 export interface ContextUser {
   userId: string
   role: 'person' | 'admin' | 'vendor'

@@ -13,7 +13,7 @@ import {
 } from '../../ui';
 import { Sheet } from '../../ui/Sheet';
 import { SignOutButton } from '../../ui/SignOutButton';
-import { useAggregatedOrder, useMenuItems } from '../../api/hooks';
+import { useAggregatedOrder, useMenuItems, useMealDoneStatus } from '../../api/hooks';
 import { gqlRequest } from '../../api/client';
 import { AGGREGATED_ORDER, CONFIRM_ORDER_WITH_ITEMS } from '../../api/operations';
 import { useToast } from '../../context/ToastContext';
@@ -45,6 +45,7 @@ export function AdminOrdersScreen() {
 
   const { aggregated, loading, refetch } = useAggregatedOrder(date, meal);
   const menu = useMenuItems(meal);
+  const { doneUsers, refetch: refetchDone } = useMealDoneStatus(date, meal);
 
   useEffect(() => {
     setItems(
@@ -309,6 +310,60 @@ export function AdminOrdersScreen() {
         </Card>
       )}
 
+      {/* Eating status */}
+      {items.length > 0 && (
+        <Card title="Eating status">
+          {(() => {
+            const allPersonIds = new Set<string>();
+            const allPersonNames = new Map<string, string>();
+            items.forEach(item => {
+              item.personBreakdown.forEach(pb => {
+                allPersonIds.add(pb.userId);
+                allPersonNames.set(pb.userId, pb.userName);
+              });
+            });
+            const doneIds = new Set(doneUsers.map(d => d.userId));
+            const eaten = Array.from(allPersonIds).filter(id => doneIds.has(id));
+            const notEaten = Array.from(allPersonIds).filter(id => !doneIds.has(id));
+            if (allPersonIds.size === 0) {
+              return <Text style={styles.itemMeta}>No person selections for this meal.</Text>;
+            }
+            return (
+              <View>
+                <View style={styles.eatingStatusRow}>
+                  <Text style={styles.eatingLabel}>
+                    Eaten ({eaten.length}/{allPersonIds.size})
+                  </Text>
+                  {eaten.length === 0 ? (
+                    <Text style={styles.eatingEmpty}>None yet</Text>
+                  ) : (
+                    eaten.map(id => (
+                      <View key={id} style={styles.eatingChip}>
+                        <Text style={styles.eatingChipDone}>✓ {allPersonNames.get(id)}</Text>
+                      </View>
+                    ))
+                  )}
+                </View>
+                <View style={[styles.eatingStatusRow, { marginTop: spacing.sm }]}>
+                  <Text style={styles.eatingLabel}>
+                    Not eaten ({notEaten.length}/{allPersonIds.size})
+                  </Text>
+                  {notEaten.length === 0 ? (
+                    <Text style={styles.eatingEmpty}>Everyone has eaten</Text>
+                  ) : (
+                    notEaten.map(id => (
+                      <View key={id} style={styles.eatingChipPending}>
+                        <Text style={styles.eatingChipPendingText}>○ {allPersonNames.get(id)}</Text>
+                      </View>
+                    ))
+                  )}
+                </View>
+              </View>
+            );
+          })()}
+        </Card>
+      )}
+
       <Button
         title="Add item"
         icon="＋"
@@ -422,6 +477,47 @@ const styles = StyleSheet.create({
   },
   breakdownName: { color: colors.textMuted, fontSize: font.small },
   breakdownQty: { color: colors.text, fontSize: font.small, fontWeight: '600' },
+
+  eatingStatusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  eatingLabel: {
+    color: colors.text,
+    fontSize: font.small,
+    fontWeight: '700',
+    width: '100%',
+    marginBottom: 2,
+  },
+  eatingEmpty: {
+    color: colors.textFaint,
+    fontSize: font.tiny,
+    fontStyle: 'italic',
+  },
+  eatingChip: {
+    backgroundColor: 'rgba(34,197,94,0.12)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+  },
+  eatingChipDone: {
+    color: colors.success,
+    fontSize: font.tiny,
+    fontWeight: '700',
+  },
+  eatingChipPending: {
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+  },
+  eatingChipPendingText: {
+    color: colors.textMuted,
+    fontSize: font.tiny,
+    fontWeight: '600',
+  },
 
   sheetList: { marginTop: spacing.sm },
   sheetItem: {

@@ -8,6 +8,7 @@ export const COLLECTIONS = {
   confirmed_orders: 'confirmed_orders',
   feedback: 'feedback',
   meal_opt_outs: 'meal_opt_outs',
+  meal_done: 'meal_done',
 } as const
 
 export type CollectionName = keyof typeof COLLECTIONS

@@ -23,6 +23,9 @@ import {
   CONFIRMED_FEEDBACKS,
   MY_MEAL_OPT_OUTS,
   TOGGLE_MEAL_OPT_OUT,
+  MY_MEAL_DONE_FOR_WEEK,
+  MARK_MEAL_DONE,
+  MEAL_DONE_STATUS,
 } from './operations'
 import { toUser, toMenuItem, toSelection, toAggregatedOrder, toConfirmedOrder, toFeedback } from './mappers'
 import type { MealType, UserRole } from '@/shared/types'
@@ -318,4 +321,31 @@ export function useToggleMealOptOut() {
     refetchQueries: [MY_MEAL_OPT_OUTS],
   })
   return { mutate, loading }
+}
+
+interface MealDoneForWeekData { myMealDoneForWeek: { id: string; userId: string; userName: string; date: string; mealType: string; markedAt: string }[] }
+export function useMyMealDoneForWeek(startDate: string) {
+  const { data, loading, error, refetch } = useQuery<MealDoneForWeekData>(MY_MEAL_DONE_FOR_WEEK, {
+    variables: { startDate },
+    skip: !startDate,
+  })
+  const doneList = (data?.myMealDoneForWeek ?? []).map(d => ({ date: d.date, mealType: d.mealType as MealType }))
+  return { doneList, isLoading: loading, error, refetch }
+}
+
+export function useMarkMealDone() {
+  const [mutate, { loading }] = useMutation(MARK_MEAL_DONE, {
+    refetchQueries: [MY_MEAL_DONE_FOR_WEEK],
+  })
+  return { mutate, loading }
+}
+
+interface MealDoneStatusData { mealDoneStatus: { id: string; userId: string; userName: string; date: string; mealType: string; markedAt: string }[] }
+export function useMealDoneStatus(date: string, mealType: MealType) {
+  const { data, loading, error, refetch } = useQuery<MealDoneStatusData>(MEAL_DONE_STATUS, {
+    variables: { date, mealType },
+    skip: !date || !mealType,
+  })
+  const doneUsers = (data?.mealDoneStatus ?? []).map(d => ({ userId: d.userId, userName: d.userName, mealType: d.mealType as MealType, markedAt: d.markedAt }))
+  return { doneUsers, isLoading: loading, error, refetch }
 }

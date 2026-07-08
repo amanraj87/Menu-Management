@@ -38,6 +38,10 @@ export async function connectDb(): Promise<Db> {
     { userId: 1, date: 1, mealType: 1 },
     { unique: true }
   ).catch(() => {})
+  await db.collection(COLLECTIONS.meal_done).createIndex(
+    { userId: 1, date: 1, mealType: 1 },
+    { unique: true }
+  ).catch(() => {})
 
   return db
 }

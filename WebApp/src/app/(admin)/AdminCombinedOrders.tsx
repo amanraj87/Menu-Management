@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useApolloClient } from '@apollo/client/react'
 import { Card, Button, Loader, Table, Thead, Tbody, Tr, Th, Td } from '@/shared/ui'
 import type { MealType } from '@/shared/types'
-import { useAggregatedOrder, useConfirmOrderWithItems, useMenuItems } from '@/shared/graphql/hooks'
+import { useAggregatedOrder, useConfirmOrderWithItems, useMenuItems, useMealDoneStatus } from '@/shared/graphql/hooks'
 import { AGGREGATED_ORDER, CONFIRM_ORDER_WITH_ITEMS, CONFIRMED_ORDERS } from '@/shared/graphql/operations'
 import { useToastStore } from '@/shared/stores/toastStore'
 
@@ -59,6 +59,7 @@ export function AdminCombinedOrders() {
 
   const { aggregated, isLoading } = useAggregatedOrder(date, meal)
   const { items: menuItemsForMeal } = useMenuItems(meal)
+  const { doneUsers } = useMealDoneStatus(date, meal)
   const { confirmOrderWithItems, isPending: confirmPending } = useConfirmOrderWithItems(
     () => toast.add('Order confirmed. Vendor can see it.', 'success'),
     (e) => toast.add(e.message, 'error')
@@ -368,6 +369,61 @@ export function AdminCombinedOrders() {
                 </Button>
               </div>
             )}
+            {/* Eating status */}
+            {(() => {
+              const allPersonIds = new Set<string>()
+              const allPersonNames = new Map<string, string>()
+              items.forEach(row => {
+                row.personBreakdown.forEach((p: { userId: string; userName: string }) => {
+                  allPersonIds.add(p.userId)
+                  allPersonNames.set(p.userId, p.userName)
+                })
+              })
+              if (allPersonIds.size === 0) return null
+              const doneIds = new Set(doneUsers.map(d => d.userId))
+              const eaten = Array.from(allPersonIds).filter(id => doneIds.has(id))
+              const notEaten = Array.from(allPersonIds).filter(id => !doneIds.has(id))
+              return (
+                <div style={{ marginTop: '1rem', padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: 8, background: 'var(--color-surface)' }}>
+                  <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.875rem' }}>Eating status</h4>
+                  <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+                    <div>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary, #22c55e)' }}>
+                        Eaten ({eaten.length}/{allPersonIds.size})
+                      </span>
+                      <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.3rem' }}>
+                        {eaten.length === 0 ? (
+                          <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>None yet</span>
+                        ) : (
+                          eaten.map(id => (
+                            <span key={id} style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-primary, #22c55e)', background: 'rgba(34,197,94,0.1)', padding: '2px 8px', borderRadius: 12 }}>
+                              ✓ {allPersonNames.get(id)}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-muted)' }}>
+                        Not eaten ({notEaten.length}/{allPersonIds.size})
+                      </span>
+                      <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.3rem' }}>
+                        {notEaten.length === 0 ? (
+                          <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>Everyone has eaten</span>
+                        ) : (
+                          notEaten.map(id => (
+                            <span key={id} style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-muted)', background: 'var(--color-secondary, #3f3f46)', padding: '2px 8px', borderRadius: 12 }}>
+                              ○ {allPersonNames.get(id)}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+
             <div style={{ marginTop: '1rem' }}>
               <Button onClick={handleSendEdited} disabled={confirmPending}>
                 {confirmPending ? 'Confirming…' : 'Confirm'}

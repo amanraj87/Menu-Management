@@ -153,3 +153,21 @@ export const TOGGLE_MEAL_OPT_OUT = `
     toggleMealOptOut(date: $date, mealType: $mealType, optedOut: $optedOut)
   }
 `;
+
+export const MY_MEAL_DONE_FOR_WEEK = `
+  query MyMealDoneForWeek($startDate: String!) {
+    myMealDoneForWeek(startDate: $startDate) { id userId userName date mealType markedAt }
+  }
+`;
+
+export const MARK_MEAL_DONE = `
+  mutation MarkMealDone($date: String!, $mealType: MealType!, $done: Boolean!) {
+    markMealDone(date: $date, mealType: $mealType, done: $done)
+  }
+`;
+
+export const MEAL_DONE_STATUS = `
+  query MealDoneStatus($date: String!, $mealType: MealType!) {
+    mealDoneStatus(date: $date, mealType: $mealType) { id userId userName date mealType markedAt }
+  }
+`;

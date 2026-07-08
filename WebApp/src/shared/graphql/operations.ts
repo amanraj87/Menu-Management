@@ -295,3 +295,35 @@ export const TOGGLE_MEAL_OPT_OUT = gql`
     toggleMealOptOut(date: $date, mealType: $mealType, optedOut: $optedOut)
   }
 `
+
+export const MY_MEAL_DONE_FOR_WEEK = gql`
+  query MyMealDoneForWeek($startDate: String!) {
+    myMealDoneForWeek(startDate: $startDate) {
+      id
+      userId
+      userName
+      date
+      mealType
+      markedAt
+    }
+  }
+`
+
+export const MARK_MEAL_DONE = gql`
+  mutation MarkMealDone($date: String!, $mealType: MealType!, $done: Boolean!) {
+    markMealDone(date: $date, mealType: $mealType, done: $done)
+  }
+`
+
+export const MEAL_DONE_STATUS = gql`
+  query MealDoneStatus($date: String!, $mealType: MealType!) {
+    mealDoneStatus(date: $date, mealType: $mealType) {
+      id
+      userId
+      userName
+      date
+      mealType
+      markedAt
+    }
+  }
+`

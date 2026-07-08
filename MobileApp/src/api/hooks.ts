@@ -5,6 +5,8 @@ import {
   MENU_ITEMS,
   MY_SELECTIONS_FOR_WEEK,
   MY_MEAL_OPT_OUTS,
+  MY_MEAL_DONE_FOR_WEEK,
+  MEAL_DONE_STATUS,
   AGGREGATED_ORDER,
   CONFIRMED_ORDERS,
   FEEDBACKS_FOR_ADMIN,
@@ -174,6 +176,47 @@ export function useMyMealOptOuts(startDate: string) {
     (o: any) => ({ date: o.date, mealType: o.mealType as MealType }),
   );
   return { optOuts, ...q };
+}
+
+export interface MealDone {
+  date: string;
+  mealType: MealType;
+}
+
+export function useMyMealDoneForWeek(startDate: string) {
+  const q = useGqlQuery<{ myMealDoneForWeek: any[] }>(
+    MY_MEAL_DONE_FOR_WEEK,
+    { startDate },
+    { skip: !startDate },
+  );
+  const doneList: MealDone[] = (q.data?.myMealDoneForWeek ?? []).map(
+    (o: any) => ({ date: o.date, mealType: o.mealType as MealType }),
+  );
+  return { doneList, ...q };
+}
+
+export interface MealDoneUser {
+  userId: string;
+  userName: string;
+  mealType: MealType;
+  markedAt: string;
+}
+
+export function useMealDoneStatus(date: string, mealType: MealType) {
+  const q = useGqlQuery<{ mealDoneStatus: any[] }>(
+    MEAL_DONE_STATUS,
+    { date, mealType },
+    { skip: !date || !mealType },
+  );
+  const doneUsers: MealDoneUser[] = (q.data?.mealDoneStatus ?? []).map(
+    (o: any) => ({
+      userId: o.userId,
+      userName: o.userName,
+      mealType: o.mealType as MealType,
+      markedAt: o.markedAt,
+    }),
+  );
+  return { doneUsers, ...q };
 }
 
 export function useAggregatedOrder(date: string, mealType: MealType) {
