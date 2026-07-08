@@ -11,6 +11,8 @@ import {
   CONFIRMED_ORDERS,
   FEEDBACKS_FOR_ADMIN,
   CONFIRMED_FEEDBACKS,
+  CONFIRMED_ORDERS_FOR_RANGE,
+  GET_SETTINGS,
 } from './operations';
 import type {
   AggregatedOrder,
@@ -253,4 +255,26 @@ export function useFeedbacksForAdmin() {
 export function useConfirmedFeedbacks() {
   const q = useGqlQuery<{ confirmedFeedbacks: any[] }>(CONFIRMED_FEEDBACKS);
   return { feedbacks: (q.data?.confirmedFeedbacks ?? []).map(toFeedback), ...q };
+}
+
+export function useConfirmedOrdersForRange(startDate: string, endDate: string) {
+  const q = useGqlQuery<{ confirmedOrdersForRange: any[] }>(
+    CONFIRMED_ORDERS_FOR_RANGE,
+    { startDate, endDate },
+    { skip: !startDate || !endDate },
+  );
+  const orders: ConfirmedOrder[] = (q.data?.confirmedOrdersForRange ?? []).map(
+    (o: any) => ({ ...o, _id: o.id }),
+  );
+  return { orders, ...q };
+}
+
+export interface Settings {
+  weeklyMealCap: number | null;
+  updatedAt: string | null;
+}
+
+export function useSettings() {
+  const q = useGqlQuery<{ getSettings: Settings }>(GET_SETTINGS);
+  return { settings: q.data?.getSettings ?? { weeklyMealCap: null, updatedAt: null }, ...q };
 }

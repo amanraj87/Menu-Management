@@ -3,7 +3,7 @@ import { getDb } from '../db.js'
 import { COLLECTIONS } from '../constants/collections.js'
 import type { ContextUser } from '../types.js'
 import type { MealType } from '../types.js'
-import type { SelectionDoc, SelectionItemDoc } from '../types.js'
+import type { SelectionDoc, SelectionItemDoc, MenuItemDoc, SettingsDoc } from '../types.js'
 
 function toSelection(doc: SelectionDoc | null): Record<string, unknown> | null {
   if (!doc) return null
@@ -69,6 +69,57 @@ export async function putSelection(
   const user = context.user
   if (!user) throw new Error('Unauthorized: user required for putSelection')
   const db = getDb()
+
+  const settings = await db.collection(COLLECTIONS.settings).findOne({}) as SettingsDoc | null
+  const cap = settings?.weeklyMealCap ?? null
+  if (cap != null && cap > 0) {
+    const inputDate = args.input.date
+    const d = new Date(inputDate + 'T12:00:00')
+    const day = d.getDay()
+    const diff = day === 0 ? -6 : 1 - day
+    const ws = new Date(d)
+    ws.setDate(d.getDate() + diff)
+    const weekDates: string[] = []
+    for (let i = 0; i < 7; i++) {
+      const wd = new Date(ws)
+      wd.setDate(ws.getDate() + i)
+      weekDates.push(wd.toISOString().slice(0, 10))
+    }
+
+    const weekSelections = await db.collection(COLLECTIONS.selections).find({
+      userId: new ObjectId(user.userId),
+      date: { $in: weekDates },
+    }).toArray() as SelectionDoc[]
+
+    const allMenuIds = new Set<string>()
+    for (const sel of weekSelections) {
+      for (const it of sel.items) allMenuIds.add(it.menuItemId.toString())
+    }
+    for (const it of args.input.items) allMenuIds.add(it.menuItemId)
+    const menuItems = allMenuIds.size > 0
+      ? await db.collection(COLLECTIONS.menu_items).find({ _id: { $in: Array.from(allMenuIds).map(id => new ObjectId(id)) } }).toArray() as MenuItemDoc[]
+      : []
+    const priceMap = new Map(menuItems.map(m => [m._id.toString(), m.pricePerUnit ?? 0]))
+
+    let weeklyTotal = 0
+    for (const sel of weekSelections) {
+      const isSameSlot = sel.date === inputDate && sel.mealType === args.input.mealType
+      if (isSameSlot) continue
+      for (const it of sel.items) {
+        weeklyTotal += (priceMap.get(it.menuItemId.toString()) ?? 0) * it.quantity
+      }
+    }
+
+    let newSlotCost = 0
+    for (const it of args.input.items) {
+      newSlotCost += (priceMap.get(it.menuItemId) ?? 0) * it.quantity
+    }
+
+    if (weeklyTotal + newSlotCost > cap) {
+      throw new Error(`Weekly meal cap exceeded. Your weekly total would be ₹${Math.round(weeklyTotal + newSlotCost)} which exceeds the cap of ₹${Math.round(cap)}.`)
+    }
+  }
+
   const items: SelectionItemDoc[] = args.input.items.map((i) => ({
     menuItemId: new ObjectId(i.menuItemId),
     quantity: i.quantity,

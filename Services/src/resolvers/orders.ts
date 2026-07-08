@@ -196,16 +196,8 @@ export async function confirmOrderWithItems(
   }
 }
 
-export async function confirmedOrders(
-  _: unknown,
-  args: { date: string }
-): Promise<Record<string, unknown>[]> {
-  const db = getDb()
-  const orders = await db
-    .collection(COLLECTIONS.confirmed_orders)
-    .find({ date: args.date })
-    .toArray() as ConfirmedOrderDoc[]
-  return orders.map((doc) => ({
+function toConfirmedOrder(doc: ConfirmedOrderDoc): Record<string, unknown> {
+  return {
     id: doc._id.toString(),
     date: doc.date,
     mealType: doc.mealType,
@@ -222,5 +214,29 @@ export async function confirmedOrders(
     })),
     confirmedBy: doc.confirmedBy.toString(),
     confirmedAt: doc.confirmedAt.toISOString(),
-  }))
+  }
+}
+
+export async function confirmedOrders(
+  _: unknown,
+  args: { date: string }
+): Promise<Record<string, unknown>[]> {
+  const db = getDb()
+  const orders = await db
+    .collection(COLLECTIONS.confirmed_orders)
+    .find({ date: args.date })
+    .toArray() as ConfirmedOrderDoc[]
+  return orders.map(toConfirmedOrder)
+}
+
+export async function confirmedOrdersForRange(
+  _: unknown,
+  args: { startDate: string; endDate: string }
+): Promise<Record<string, unknown>[]> {
+  const db = getDb()
+  const orders = await db
+    .collection(COLLECTIONS.confirmed_orders)
+    .find({ date: { $gte: args.startDate, $lte: args.endDate } })
+    .toArray() as ConfirmedOrderDoc[]
+  return orders.map(toConfirmedOrder)
 }

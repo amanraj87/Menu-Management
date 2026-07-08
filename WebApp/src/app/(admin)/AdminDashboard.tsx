@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
-import { Card, Badge, Loader } from '@/shared/ui'
+import { useMemo, useState } from 'react'
+import { Card, Badge, Loader, Button } from '@/shared/ui'
 import { Link } from 'react-router-dom'
-import { useUsers, useFeedbacksForAdmin, useConfirmedOrders, useMenuItems } from '@/shared/graphql/hooks'
+import { useUsers, useFeedbacksForAdmin, useMenuItems, useConfirmedOrdersForRange, useSettings, useUpdateSettings } from '@/shared/graphql/hooks'
+import { useToastStore } from '@/shared/stores/toastStore'
 import type { ConfirmedOrder } from '@/shared/types'
 
 function toDateString(d: Date) {
@@ -16,11 +17,24 @@ function getWeekStart(dateStr: string): string {
   return toDateString(d)
 }
 
-function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr + 'T12:00:00')
-  d.setDate(d.getDate() + days)
+function getWeekEnd(weekStart: string): string {
+  const d = new Date(weekStart + 'T12:00:00')
+  d.setDate(d.getDate() + 6)
   return toDateString(d)
 }
+
+function getMonthStart(dateStr: string): string {
+  return dateStr.slice(0, 8) + '01'
+}
+
+function getMonthEnd(dateStr: string): string {
+  const year = parseInt(dateStr.slice(0, 4), 10)
+  const month = parseInt(dateStr.slice(5, 7), 10)
+  const lastDay = new Date(year, month, 0).getDate()
+  return `${dateStr.slice(0, 8)}${String(lastDay).padStart(2, '0')}`
+}
+
+type Period = 'day' | 'week' | 'month' | 'custom'
 
 function computeExpense(
   orders: ConfirmedOrder[],
@@ -50,73 +64,74 @@ function computeExpense(
   return { total, perPerson }
 }
 
-function formatMoney(n: number): string {
-  return Number.isFinite(n) ? n.toFixed(2) : '0.00'
+function computeDishBreakdown(
+  orders: ConfirmedOrder[]
+): Array<{ name: string; unit: string; quantity: number }> {
+  const dishMap = new Map<string, { name: string; unit: string; quantity: number }>()
+  for (const order of orders) {
+    for (const item of order.items) {
+      const existing = dishMap.get(item.menuItemId)
+      if (existing) {
+        existing.quantity += item.quantity
+      } else {
+        dishMap.set(item.menuItemId, { name: item.name, unit: item.unit, quantity: item.quantity })
+      }
+    }
+  }
+  return Array.from(dishMap.values()).sort((a, b) => b.quantity - a.quantity)
 }
 
-function getMonthDates(today: string): string[] {
-  const year = parseInt(today.slice(0, 4), 10)
-  const month = parseInt(today.slice(5, 7), 10)
-  const daysInMonth = new Date(year, month, 0).getDate()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const out: string[] = []
-  for (let d = 1; d <= 31; d++) {
-    out.push(d <= daysInMonth ? `${year}-${pad(month)}-${pad(d)}` : '2099-12-31')
-  }
-  return out
+function formatMoney(n: number): string {
+  return Number.isFinite(n) ? `₹${n.toFixed(2)}` : '₹0.00'
 }
 
 export function AdminDashboard() {
   const today = toDateString(new Date())
-  const weekStart = getWeekStart(today)
-  const weekDates = useMemo(() => [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(weekStart, i)), [weekStart])
-  const monthDates = useMemo(() => getMonthDates(today), [today])
+  const toast = useToastStore()
+
+  const [expensePeriod, setExpensePeriod] = useState<Period>('day')
+  const [expenseCustomStart, setExpenseCustomStart] = useState(today)
+  const [expenseCustomEnd, setExpenseCustomEnd] = useState(today)
+
+  const [dishPeriod, setDishPeriod] = useState<Period>('day')
+  const [dishCustomStart, setDishCustomStart] = useState(today)
+  const [dishCustomEnd, setDishCustomEnd] = useState(today)
+
+  const [capInput, setCapInput] = useState('')
+  const [capEditing, setCapEditing] = useState(false)
 
   const { users, isLoading: usersLoading } = useUsers()
   const { feedbacks, isLoading: feedbackLoading } = useFeedbacksForAdmin()
   const { items: menuItems, isLoading: menuLoading } = useMenuItems()
-  const { orders: todayOrders, isLoading: ordersTodayLoading } = useConfirmedOrders(today)
-  const { orders: ordersD0 } = useConfirmedOrders(weekDates[0])
-  const { orders: ordersD1 } = useConfirmedOrders(weekDates[1])
-  const { orders: ordersD2 } = useConfirmedOrders(weekDates[2])
-  const { orders: ordersD3 } = useConfirmedOrders(weekDates[3])
-  const { orders: ordersD4 } = useConfirmedOrders(weekDates[4])
-  const { orders: ordersD5 } = useConfirmedOrders(weekDates[5])
-  const { orders: ordersD6 } = useConfirmedOrders(weekDates[6])
-  const { orders: monthD0 } = useConfirmedOrders(monthDates[0])
-  const { orders: monthD1 } = useConfirmedOrders(monthDates[1])
-  const { orders: monthD2 } = useConfirmedOrders(monthDates[2])
-  const { orders: monthD3 } = useConfirmedOrders(monthDates[3])
-  const { orders: monthD4 } = useConfirmedOrders(monthDates[4])
-  const { orders: monthD5 } = useConfirmedOrders(monthDates[5])
-  const { orders: monthD6 } = useConfirmedOrders(monthDates[6])
-  const { orders: monthD7 } = useConfirmedOrders(monthDates[7])
-  const { orders: monthD8 } = useConfirmedOrders(monthDates[8])
-  const { orders: monthD9 } = useConfirmedOrders(monthDates[9])
-  const { orders: monthD10 } = useConfirmedOrders(monthDates[10])
-  const { orders: monthD11 } = useConfirmedOrders(monthDates[11])
-  const { orders: monthD12 } = useConfirmedOrders(monthDates[12])
-  const { orders: monthD13 } = useConfirmedOrders(monthDates[13])
-  const { orders: monthD14 } = useConfirmedOrders(monthDates[14])
-  const { orders: monthD15 } = useConfirmedOrders(monthDates[15])
-  const { orders: monthD16 } = useConfirmedOrders(monthDates[16])
-  const { orders: monthD17 } = useConfirmedOrders(monthDates[17])
-  const { orders: monthD18 } = useConfirmedOrders(monthDates[18])
-  const { orders: monthD19 } = useConfirmedOrders(monthDates[19])
-  const { orders: monthD20 } = useConfirmedOrders(monthDates[20])
-  const { orders: monthD21 } = useConfirmedOrders(monthDates[21])
-  const { orders: monthD22 } = useConfirmedOrders(monthDates[22])
-  const { orders: monthD23 } = useConfirmedOrders(monthDates[23])
-  const { orders: monthD24 } = useConfirmedOrders(monthDates[24])
-  const { orders: monthD25 } = useConfirmedOrders(monthDates[25])
-  const { orders: monthD26 } = useConfirmedOrders(monthDates[26])
-  const { orders: monthD27 } = useConfirmedOrders(monthDates[27])
-  const { orders: monthD28 } = useConfirmedOrders(monthDates[28])
-  const { orders: monthD29 } = useConfirmedOrders(monthDates[29])
-  const { orders: monthD30 } = useConfirmedOrders(monthDates[30])
+  const { settings, isLoading: settingsLoading } = useSettings()
+  const { updateSettings, isPending: settingsPending } = useUpdateSettings(
+    () => { toast.add('Weekly cap updated.', 'success'); setCapEditing(false) },
+    (e) => toast.add(e.message, 'error')
+  )
 
-  const pendingFeedback = feedbacks.filter((f) => f.status === 'pending').length
-  const isLoading = usersLoading || feedbackLoading || menuLoading || ordersTodayLoading
+  const weekStart = getWeekStart(today)
+  const weekEnd = getWeekEnd(weekStart)
+  const monthStart = getMonthStart(today)
+  const monthEnd = getMonthEnd(today)
+
+  function getRange(period: Period, customStart: string, customEnd: string): [string, string] {
+    switch (period) {
+      case 'day': return [today, today]
+      case 'week': return [weekStart, weekEnd]
+      case 'month': return [monthStart, monthEnd]
+      case 'custom': return [customStart, customEnd]
+    }
+  }
+
+  const [expStart, expEnd] = getRange(expensePeriod, expenseCustomStart, expenseCustomEnd)
+  const [dshStart, dshEnd] = getRange(dishPeriod, dishCustomStart, dishCustomEnd)
+
+  const { orders: expenseOrders, isLoading: expenseOrdersLoading } = useConfirmedOrdersForRange(expStart, expEnd)
+  const { orders: dishOrders, isLoading: dishOrdersLoading } = useConfirmedOrdersForRange(dshStart, dshEnd)
+
+  // Per-user week & month cost
+  const { orders: userWeekOrders } = useConfirmedOrdersForRange(weekStart, weekEnd)
+  const { orders: userMonthOrders } = useConfirmedOrdersForRange(monthStart, monthEnd)
 
   const priceByMenuId = useMemo(() => {
     const map: Record<string, number> = {}
@@ -128,127 +143,78 @@ export function AdminDashboard() {
     return map
   }, [menuItems])
 
-  const todayExpense = useMemo(
-    () => computeExpense(todayOrders, priceByMenuId),
-    [todayOrders, priceByMenuId]
-  )
-  const weekOrders = useMemo(
-    () => [...ordersD0, ...ordersD1, ...ordersD2, ...ordersD3, ...ordersD4, ...ordersD5, ...ordersD6],
-    [ordersD0, ordersD1, ordersD2, ordersD3, ordersD4, ordersD5, ordersD6]
-  )
-  const weekExpense = useMemo(
-    () => computeExpense(weekOrders, priceByMenuId),
-    [weekOrders, priceByMenuId]
-  )
-  const monthOrders = useMemo(
-    () => [
-      ...monthD0, ...monthD1, ...monthD2, ...monthD3, ...monthD4, ...monthD5, ...monthD6,
-      ...monthD7, ...monthD8, ...monthD9, ...monthD10, ...monthD11, ...monthD12, ...monthD13, ...monthD14,
-      ...monthD15, ...monthD16, ...monthD17, ...monthD18, ...monthD19, ...monthD20, ...monthD21,
-      ...monthD22, ...monthD23, ...monthD24, ...monthD25, ...monthD26, ...monthD27, ...monthD28,
-      ...monthD29, ...monthD30,
-    ],
-    [monthD0, monthD1, monthD2, monthD3, monthD4, monthD5, monthD6, monthD7, monthD8, monthD9,
-      monthD10, monthD11, monthD12, monthD13, monthD14, monthD15, monthD16, monthD17, monthD18, monthD19,
-      monthD20, monthD21, monthD22, monthD23, monthD24, monthD25, monthD26, monthD27, monthD28, monthD29, monthD30]
-  )
-  const monthExpense = useMemo(
-    () => computeExpense(monthOrders, priceByMenuId),
-    [monthOrders, priceByMenuId]
-  )
+  const expenseData = useMemo(() => computeExpense(expenseOrders, priceByMenuId), [expenseOrders, priceByMenuId])
+  const dishData = useMemo(() => computeDishBreakdown(dishOrders), [dishOrders])
+  const userWeekExpense = useMemo(() => computeExpense(userWeekOrders, priceByMenuId), [userWeekOrders, priceByMenuId])
+  const userMonthExpense = useMemo(() => computeExpense(userMonthOrders, priceByMenuId), [userMonthOrders, priceByMenuId])
+
+  const pendingFeedback = feedbacks.filter((f) => f.status === 'pending').length
+  const isLoading = usersLoading || feedbackLoading || menuLoading || settingsLoading
 
   if (isLoading) return <Loader />
 
   const personCount = users.filter((u) => u.role === 'person').length
   const vendorCount = users.filter((u) => u.role === 'vendor').length
-  const todayMealsCount = todayOrders.length
-  const weekMealsCount = weekOrders.length
-  const monthMealsCount = monthOrders.length
-  const monthLabel = (() => {
-    const d = new Date(today + 'T12:00:00')
-    return d.toLocaleString('default', { month: 'long', year: 'numeric' })
-  })()
+
+  const periodLabel = (p: Period) => {
+    switch (p) {
+      case 'day': return `Today (${today})`
+      case 'week': return `This week (${weekStart} to ${weekEnd})`
+      case 'month': return `This month (${monthStart} to ${monthEnd})`
+      case 'custom': return 'Custom range'
+    }
+  }
+
+  function PeriodSelector({ value, onChange, customStart, customEnd, onCustomStartChange, onCustomEndChange }: {
+    value: Period; onChange: (p: Period) => void
+    customStart: string; customEnd: string
+    onCustomStartChange: (v: string) => void; onCustomEndChange: (v: string) => void
+  }) {
+    return (
+      <div style={{ marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+          {(['day', 'week', 'month', 'custom'] as Period[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => onChange(p)}
+              style={{
+                padding: '0.35rem 0.75rem',
+                borderRadius: '0.375rem',
+                border: '1px solid',
+                borderColor: value === p ? 'var(--color-primary)' : 'var(--color-border)',
+                background: value === p ? 'var(--color-primary)' : 'transparent',
+                color: value === p ? '#fff' : 'var(--color-text)',
+                cursor: 'pointer',
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+              }}
+            >
+              {p === 'day' ? 'Day' : p === 'week' ? 'Week' : p === 'month' ? 'Month' : 'Custom'}
+            </button>
+          ))}
+        </div>
+        {value === 'custom' && (
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.875rem' }}>
+            <input type="date" value={customStart} onChange={(e) => onCustomStartChange(e.target.value)}
+              style={{ padding: '0.3rem 0.5rem', borderRadius: '0.375rem', border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }} />
+            <span style={{ color: 'var(--color-text-muted)' }}>to</span>
+            <input type="date" value={customEnd} onChange={(e) => onCustomEndChange(e.target.value)}
+              style={{ padding: '0.3rem 0.5rem', borderRadius: '0.375rem', border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }} />
+          </div>
+        )}
+        <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+          {periodLabel(value)}
+        </p>
+      </div>
+    )
+  }
 
   return (
     <>
       <Card className="content-card" title="Dashboard">
-        <p className="content-subtitle">
-          Overview for admin tasks.
-        </p>
+        <p className="content-subtitle">Overview for admin tasks.</p>
 
-        <section style={{ marginBottom: '1.5rem' }}>
-          <h3>Today</h3>
-          <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-            {today} · {todayMealsCount} meal order{todayMealsCount !== 1 ? 's' : ''} confirmed for today
-          </p>
-        </section>
-
-        <section style={{ marginBottom: '1.5rem' }}>
-          <h3>Expenses</h3>
-          <div style={{ display: 'grid', gap: '1.25rem', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
-            <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem', background: 'var(--color-surface)' }}>
-              <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Today</h4>
-              <p style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>{formatMoney(todayExpense.total)}</p>
-              <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
-                total from {todayMealsCount} confirmed meal{todayMealsCount !== 1 ? 's' : ''}
-              </p>
-              {todayExpense.perPerson.length > 0 && (
-                <ul style={{ listStyle: 'none', padding: 0, margin: '0.75rem 0 0', fontSize: '0.875rem', borderTop: '1px solid var(--color-border)', paddingTop: '0.5rem' }}>
-                  {todayExpense.perPerson.map((p) => (
-                    <li key={p.userId} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', padding: '0.2rem 0' }}>
-                      <span>{p.userName}</span>
-                      <span style={{ fontWeight: 500 }}>{formatMoney(p.total)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem', background: 'var(--color-surface)' }}>
-              <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>This week (Mon–Sun)</h4>
-              <p style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>{formatMoney(weekExpense.total)}</p>
-              <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
-                total from {weekMealsCount} confirmed meal{weekMealsCount !== 1 ? 's' : ''}
-                {weekExpense.perPerson.length > 0 && (
-                  <> · avg {formatMoney(weekExpense.total / weekExpense.perPerson.length)} per person</>
-                )}
-              </p>
-              {weekExpense.perPerson.length > 0 && (
-                <ul style={{ listStyle: 'none', padding: 0, margin: '0.75rem 0 0', fontSize: '0.875rem', borderTop: '1px solid var(--color-border)', paddingTop: '0.5rem' }}>
-                  {weekExpense.perPerson.map((p) => (
-                    <li key={p.userId} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', padding: '0.2rem 0' }}>
-                      <span>{p.userName}</span>
-                      <span style={{ fontWeight: 500 }}>{formatMoney(p.total)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem', background: 'var(--color-surface)' }}>
-              <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>This month ({monthLabel})</h4>
-              <p style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>{formatMoney(monthExpense.total)}</p>
-              <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
-                total from {monthMealsCount} confirmed meal{monthMealsCount !== 1 ? 's' : ''}
-                {monthExpense.perPerson.length > 0 && (
-                  <> · avg {formatMoney(monthExpense.total / monthExpense.perPerson.length)} per person</>
-                )}
-              </p>
-              {monthExpense.perPerson.length > 0 && (
-                <ul style={{ listStyle: 'none', padding: 0, margin: '0.75rem 0 0', fontSize: '0.875rem', borderTop: '1px solid var(--color-border)', paddingTop: '0.5rem' }}>
-                  {monthExpense.perPerson.map((p) => (
-                    <li key={p.userId} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', padding: '0.2rem 0' }}>
-                      <span>{p.userName}</span>
-                      <span style={{ fontWeight: 500 }}>{formatMoney(p.total)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-          <p style={{ margin: '0.5rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
-            Based on confirmed orders and menu item prices. Edit prices in the menu to reflect actual costs.
-          </p>
-        </section>
-
+        {/* Summary */}
         <section style={{ marginBottom: '1.5rem' }}>
           <h3>Summary</h3>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
@@ -259,13 +225,187 @@ export function AdminDashboard() {
             <li style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
               <strong style={{ color: 'var(--color-text)' }}>{pendingFeedback}</strong> pending feedback
               {pendingFeedback > 0 && (
-                <Link to="/admin/feedback">
-                  <Badge variant="warning">Review</Badge>
-                </Link>
+                <Link to="/admin/feedback"><Badge variant="warning">Review</Badge></Link>
               )}
             </li>
           </ul>
         </section>
+
+        {/* Weekly Meal Cap */}
+        <section style={{ marginBottom: '1.5rem' }}>
+          <h3>Weekly Meal Price Cap</h3>
+          <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem', background: 'var(--color-surface)' }}>
+            {!capEditing ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>
+                    {settings.weeklyMealCap != null ? `₹${settings.weeklyMealCap}` : 'No cap set'}
+                  </p>
+                  <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+                    {settings.weeklyMealCap != null ? 'Per user, per week' : 'Users can order unlimited meals'}
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => { setCapInput(settings.weeklyMealCap != null ? String(settings.weeklyMealCap) : ''); setCapEditing(true) }}>
+                  Edit
+                </Button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input
+                  type="number"
+                  placeholder="e.g. 500"
+                  value={capInput}
+                  onChange={(e) => setCapInput(e.target.value)}
+                  style={{ padding: '0.4rem 0.5rem', borderRadius: '0.375rem', border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', width: 120 }}
+                />
+                <Button size="sm" onClick={() => {
+                  const val = capInput.trim() === '' ? null : parseFloat(capInput)
+                  updateSettings(val)
+                }} disabled={settingsPending}>
+                  {settingsPending ? 'Saving…' : 'Save'}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setCapEditing(false)}>Cancel</Button>
+                {settings.weeklyMealCap != null && (
+                  <Button size="sm" variant="danger" onClick={() => updateSettings(null)} disabled={settingsPending}>
+                    Remove cap
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Expenses */}
+        <section style={{ marginBottom: '1.5rem' }}>
+          <h3>Expenses</h3>
+          <PeriodSelector
+            value={expensePeriod} onChange={setExpensePeriod}
+            customStart={expenseCustomStart} customEnd={expenseCustomEnd}
+            onCustomStartChange={setExpenseCustomStart} onCustomEndChange={setExpenseCustomEnd}
+          />
+          <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem', background: 'var(--color-surface)' }}>
+            {expenseOrdersLoading ? (
+              <p style={{ margin: 0, color: 'var(--color-text-muted)' }}>Loading…</p>
+            ) : (
+              <>
+                <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>{formatMoney(expenseData.total)}</p>
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+                  from {expenseOrders.length} confirmed meal{expenseOrders.length !== 1 ? 's' : ''}
+                  {expenseData.perPerson.length > 0 && <> · avg {formatMoney(expenseData.total / expenseData.perPerson.length)} per person</>}
+                </p>
+                {expenseData.perPerson.length > 0 && (
+                  <ul style={{ listStyle: 'none', padding: 0, margin: '0.75rem 0 0', fontSize: '0.875rem', borderTop: '1px solid var(--color-border)', paddingTop: '0.5rem' }}>
+                    {expenseData.perPerson.map((p) => (
+                      <li key={p.userId} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', padding: '0.2rem 0' }}>
+                        <span>{p.userName}</span>
+                        <span style={{ fontWeight: 500 }}>{formatMoney(p.total)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+          </div>
+        </section>
+
+        {/* Dish Breakdown */}
+        <section style={{ marginBottom: '1.5rem' }}>
+          <h3>Dish-wise Breakdown</h3>
+          <PeriodSelector
+            value={dishPeriod} onChange={setDishPeriod}
+            customStart={dishCustomStart} customEnd={dishCustomEnd}
+            onCustomStartChange={setDishCustomStart} onCustomEndChange={setDishCustomEnd}
+          />
+          <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem', background: 'var(--color-surface)' }}>
+            {dishOrdersLoading ? (
+              <p style={{ margin: 0, color: 'var(--color-text-muted)' }}>Loading…</p>
+            ) : dishData.length === 0 ? (
+              <p style={{ margin: 0, color: 'var(--color-text-muted)' }}>No orders in this period.</p>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <th style={{ textAlign: 'left', padding: '0.4rem 0', color: 'var(--color-text-muted)', fontWeight: 600 }}>Dish</th>
+                    <th style={{ textAlign: 'right', padding: '0.4rem 0', color: 'var(--color-text-muted)', fontWeight: 600 }}>Quantity</th>
+                    <th style={{ textAlign: 'right', padding: '0.4rem 0', color: 'var(--color-text-muted)', fontWeight: 600 }}>Unit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dishData.map((d, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                      <td style={{ padding: '0.4rem 0' }}>{d.name}</td>
+                      <td style={{ textAlign: 'right', padding: '0.4rem 0', fontWeight: 600 }}>{d.quantity}</td>
+                      <td style={{ textAlign: 'right', padding: '0.4rem 0', color: 'var(--color-text-muted)' }}>{d.unit}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
+
+        {/* Per-User Cost */}
+        <section style={{ marginBottom: '1.5rem' }}>
+          <h3>Per-User Cost</h3>
+          <div style={{ display: 'grid', gap: '1.25rem', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+            <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem', background: 'var(--color-surface)' }}>
+              <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>This Week ({weekStart} to {weekEnd})</h4>
+              <p style={{ margin: '0 0 0.5rem', fontSize: '1.25rem', fontWeight: 600 }}>{formatMoney(userWeekExpense.total)}</p>
+              {userWeekExpense.perPerson.length > 0 ? (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                      <th style={{ textAlign: 'left', padding: '0.3rem 0', color: 'var(--color-text-muted)', fontWeight: 600 }}>User</th>
+                      <th style={{ textAlign: 'right', padding: '0.3rem 0', color: 'var(--color-text-muted)', fontWeight: 600 }}>Cost</th>
+                      {settings.weeklyMealCap != null && <th style={{ textAlign: 'right', padding: '0.3rem 0', color: 'var(--color-text-muted)', fontWeight: 600 }}>Cap</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {userWeekExpense.perPerson.map((p) => {
+                      const overCap = settings.weeklyMealCap != null && p.total > settings.weeklyMealCap
+                      return (
+                        <tr key={p.userId} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                          <td style={{ padding: '0.3rem 0' }}>{p.userName}</td>
+                          <td style={{ textAlign: 'right', padding: '0.3rem 0', fontWeight: 500, color: overCap ? 'var(--color-danger, #ef4444)' : undefined }}>{formatMoney(p.total)}</td>
+                          {settings.weeklyMealCap != null && (
+                            <td style={{ textAlign: 'right', padding: '0.3rem 0', color: 'var(--color-text-muted)' }}>{formatMoney(settings.weeklyMealCap)}</td>
+                          )}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              ) : <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>No data.</p>}
+            </div>
+
+            <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem', background: 'var(--color-surface)' }}>
+              <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>This Month ({monthStart} to {monthEnd})</h4>
+              <p style={{ margin: '0 0 0.5rem', fontSize: '1.25rem', fontWeight: 600 }}>{formatMoney(userMonthExpense.total)}</p>
+              {userMonthExpense.perPerson.length > 0 ? (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                      <th style={{ textAlign: 'left', padding: '0.3rem 0', color: 'var(--color-text-muted)', fontWeight: 600 }}>User</th>
+                      <th style={{ textAlign: 'right', padding: '0.3rem 0', color: 'var(--color-text-muted)', fontWeight: 600 }}>Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {userMonthExpense.perPerson.map((p) => (
+                      <tr key={p.userId} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                        <td style={{ padding: '0.3rem 0' }}>{p.userName}</td>
+                        <td style={{ textAlign: 'right', padding: '0.3rem 0', fontWeight: 500 }}>{formatMoney(p.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>No data.</p>}
+            </div>
+          </div>
+        </section>
+
+        <p style={{ margin: '0.5rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+          Based on confirmed orders and menu item prices. Edit prices in the menu to reflect actual costs.
+        </p>
       </Card>
     </>
   )

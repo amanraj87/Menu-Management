@@ -1,47 +1,209 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Screen } from '../../ui/Screen';
-import { Badge, Card, Loader } from '../../ui';
+import { Badge, Button, Card, Loader, SectionLabel } from '../../ui';
 import { SignOutButton } from '../../ui/SignOutButton';
 import { gqlRequest } from '../../api/client';
-import { CONFIRMED_ORDERS } from '../../api/operations';
-import { useMenuItems, useUsers } from '../../api/hooks';
+import {
+  CONFIRMED_ORDERS_FOR_RANGE,
+  UPDATE_SETTINGS,
+} from '../../api/operations';
+import { useMenuItems, useUsers, useSettings } from '../../api/hooks';
 import { useFeedbacksForAdmin } from '../../api/hooks';
-import { colors, font, mealMeta, radius, spacing } from '../../theme';
-import { formatLong, todayISO, weekDays, weekStart } from '../../utils/date';
+import { useToast } from '../../context/ToastContext';
+import { colors, font, radius, spacing } from '../../theme';
+import { formatLong, todayISO, weekStart as getWeekStart, addDays } from '../../utils/date';
 import type { ConfirmedOrder } from '../../types';
+
+type Period = 'day' | 'week' | 'month' | 'custom';
+
+function getWeekEnd(ws: string): string {
+  return addDays(ws, 6);
+}
+
+function getMonthStart(dateStr: string): string {
+  return dateStr.slice(0, 8) + '01';
+}
+
+function getMonthEnd(dateStr: string): string {
+  const year = parseInt(dateStr.slice(0, 4), 10);
+  const month = parseInt(dateStr.slice(5, 7), 10);
+  const lastDay = new Date(year, month, 0).getDate();
+  return `${dateStr.slice(0, 8)}${String(lastDay).padStart(2, '0')}`;
+}
 
 function orderCost(
   orders: ConfirmedOrder[],
   priceMap: Map<string, number>,
-): { total: number; perPerson: Map<string, number> } {
+): { total: number; perPerson: Array<{ userId: string; userName: string; total: number }> } {
   let total = 0;
-  const perPerson = new Map<string, number>();
+  const personMap = new Map<string, { userName: string; total: number }>();
   orders.forEach(o =>
     o.items.forEach(it => {
       const price = priceMap.get(it.menuItemId) ?? 0;
       total += price * it.quantity;
       it.personBreakdown?.forEach(pb => {
-        perPerson.set(
-          pb.userId,
-          (perPerson.get(pb.userId) ?? 0) + price * pb.quantity,
-        );
+        const existing = personMap.get(pb.userId);
+        const cost = price * pb.quantity;
+        if (existing) existing.total += cost;
+        else personMap.set(pb.userId, { userName: pb.userName, total: cost });
       });
     }),
   );
+  const perPerson = Array.from(personMap.entries())
+    .map(([userId, v]) => ({ userId, userName: v.userName, total: v.total }))
+    .sort((a, b) => b.total - a.total);
   return { total, perPerson };
 }
 
+function computeDishBreakdown(orders: ConfirmedOrder[]): Array<{ name: string; unit: string; quantity: number }> {
+  const dishMap = new Map<string, { name: string; unit: string; quantity: number }>();
+  for (const order of orders) {
+    for (const item of order.items) {
+      const existing = dishMap.get(item.menuItemId);
+      if (existing) existing.quantity += item.quantity;
+      else dishMap.set(item.menuItemId, { name: item.name, unit: item.unit, quantity: item.quantity });
+    }
+  }
+  return Array.from(dishMap.values()).sort((a, b) => b.quantity - a.quantity);
+}
+
+function PeriodSelector({
+  value,
+  onChange,
+  customStart,
+  customEnd,
+  onCustomStartChange,
+  onCustomEndChange,
+}: {
+  value: Period;
+  onChange: (p: Period) => void;
+  customStart: string;
+  customEnd: string;
+  onCustomStartChange: (v: string) => void;
+  onCustomEndChange: (v: string) => void;
+}) {
+  const pills: { key: Period; label: string }[] = [
+    { key: 'day', label: 'Day' },
+    { key: 'week', label: 'Week' },
+    { key: 'month', label: 'Month' },
+    { key: 'custom', label: 'Custom' },
+  ];
+  return (
+    <View style={ps.wrap}>
+      <View style={ps.row}>
+        {pills.map(p => (
+          <Pressable
+            key={p.key}
+            onPress={() => onChange(p.key)}
+            style={[ps.pill, value === p.key && ps.pillActive]}>
+            <Text style={[ps.pillText, value === p.key && ps.pillTextActive]}>
+              {p.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      {value === 'custom' && (
+        <View style={ps.dateRow}>
+          <TextInput
+            style={ps.dateInput}
+            value={customStart}
+            onChangeText={onCustomStartChange}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={colors.textFaint}
+          />
+          <Text style={ps.dateTo}>to</Text>
+          <TextInput
+            style={ps.dateInput}
+            value={customEnd}
+            onChangeText={onCustomEndChange}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={colors.textFaint}
+          />
+        </View>
+      )}
+    </View>
+  );
+}
+
+const ps = StyleSheet.create({
+  wrap: { marginBottom: spacing.md },
+  row: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', marginBottom: spacing.sm },
+  pill: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: 'transparent',
+  },
+  pillActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  pillText: { color: colors.text, fontSize: font.small, fontWeight: '600' },
+  pillTextActive: { color: '#fff' },
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  dateInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    color: colors.text,
+    fontSize: font.small,
+  },
+  dateTo: { color: colors.textMuted, fontSize: font.small },
+});
+
 export function AdminDashboardScreen() {
   const nav = useNavigation<any>();
+  const toast = useToast();
   const today = todayISO();
+  const weekStartStr = getWeekStart(today);
+  const weekEndStr = getWeekEnd(weekStartStr);
+  const monthStartStr = getMonthStart(today);
+  const monthEndStr = getMonthEnd(today);
   const { users } = useUsers();
   const { feedbacks } = useFeedbacksForAdmin();
   const menu = useMenuItems();
+  const { settings, refetch: refetchSettings } = useSettings();
 
-  const [todayOrders, setTodayOrders] = useState<ConfirmedOrder[]>([]);
-  const [weekOrders, setWeekOrders] = useState<ConfirmedOrder[]>([]);
+  const [expensePeriod, setExpensePeriod] = useState<Period>('day');
+  const [expCustomStart, setExpCustomStart] = useState(today);
+  const [expCustomEnd, setExpCustomEnd] = useState(today);
+  const [dishPeriod, setDishPeriod] = useState<Period>('day');
+  const [dishCustomStart, setDishCustomStart] = useState(today);
+  const [dishCustomEnd, setDishCustomEnd] = useState(today);
+
+  const [capEditing, setCapEditing] = useState(false);
+  const [capInput, setCapInput] = useState('');
+  const [capSaving, setCapSaving] = useState(false);
+
+  function getRange(period: Period, cs: string, ce: string): [string, string] {
+    switch (period) {
+      case 'day': return [today, today];
+      case 'week': return [weekStartStr, weekEndStr];
+      case 'month': return [monthStartStr, monthEndStr];
+      case 'custom': return [cs, ce];
+    }
+  }
+
+  const [expStart, expEnd] = getRange(expensePeriod, expCustomStart, expCustomEnd);
+  const [dshStart, dshEnd] = getRange(dishPeriod, dishCustomStart, dishCustomEnd);
+
+  const [expenseOrders, setExpenseOrders] = useState<ConfirmedOrder[]>([]);
+  const [dishOrders, setDishOrders] = useState<ConfirmedOrder[]>([]);
+  const [userWeekOrders, setUserWeekOrders] = useState<ConfirmedOrder[]>([]);
+  const [userMonthOrders, setUserMonthOrders] = useState<ConfirmedOrder[]>([]);
   const [loading, setLoading] = useState(true);
 
   const priceMap = useMemo(() => {
@@ -53,52 +215,51 @@ export function AdminDashboardScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const days = weekDays(weekStart(today));
-      const results = await Promise.all(
-        days.map(d =>
-          gqlRequest<{ confirmedOrders: any[] }>(CONFIRMED_ORDERS, { date: d }),
-        ),
-      );
-      const all: ConfirmedOrder[] = results.flatMap(r =>
-        (r.confirmedOrders ?? []).map(o => ({ ...o, _id: o.id })),
-      );
-      setWeekOrders(all);
-      setTodayOrders(all.filter(o => o.date === today));
+      const [expRes, dshRes, uwRes, umRes] = await Promise.all([
+        gqlRequest<{ confirmedOrdersForRange: any[] }>(CONFIRMED_ORDERS_FOR_RANGE, { startDate: expStart, endDate: expEnd }),
+        gqlRequest<{ confirmedOrdersForRange: any[] }>(CONFIRMED_ORDERS_FOR_RANGE, { startDate: dshStart, endDate: dshEnd }),
+        gqlRequest<{ confirmedOrdersForRange: any[] }>(CONFIRMED_ORDERS_FOR_RANGE, { startDate: weekStartStr, endDate: weekEndStr }),
+        gqlRequest<{ confirmedOrdersForRange: any[] }>(CONFIRMED_ORDERS_FOR_RANGE, { startDate: monthStartStr, endDate: monthEndStr }),
+      ]);
+      const map = (arr: any[]) => arr.map((o: any) => ({ ...o, _id: o.id }));
+      setExpenseOrders(map(expRes.confirmedOrdersForRange ?? []));
+      setDishOrders(map(dshRes.confirmedOrdersForRange ?? []));
+      setUserWeekOrders(map(uwRes.confirmedOrdersForRange ?? []));
+      setUserMonthOrders(map(umRes.confirmedOrdersForRange ?? []));
     } catch {
-      // errors surface as empty state
     } finally {
       setLoading(false);
     }
-  }, [today]);
+  }, [expStart, expEnd, dshStart, dshEnd, weekStartStr, weekEndStr, monthStartStr, monthEndStr]);
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
-  );
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const todayCost = useMemo(
-    () => orderCost(todayOrders, priceMap),
-    [todayOrders, priceMap],
-  );
-  const weekCost = useMemo(
-    () => orderCost(weekOrders, priceMap),
-    [weekOrders, priceMap],
-  );
+  const expenseData = useMemo(() => orderCost(expenseOrders, priceMap), [expenseOrders, priceMap]);
+  const dishData = useMemo(() => computeDishBreakdown(dishOrders), [dishOrders]);
+  const userWeekExpense = useMemo(() => orderCost(userWeekOrders, priceMap), [userWeekOrders, priceMap]);
+  const userMonthExpense = useMemo(() => orderCost(userMonthOrders, priceMap), [userMonthOrders, priceMap]);
 
   const roleCounts = useMemo(() => {
     const c = { person: 0, admin: 0, vendor: 0 };
-    users.forEach(u => {
-      c[u.role]++;
-    });
+    users.forEach(u => { c[u.role]++; });
     return c;
   }, [users]);
 
   const pending = feedbacks.filter(f => f.status === 'pending').length;
-  const weekAvg =
-    weekCost.perPerson.size > 0
-      ? weekCost.total / weekCost.perPerson.size
-      : 0;
+
+  const handleSaveCap = async (value: number | null) => {
+    setCapSaving(true);
+    try {
+      await gqlRequest(UPDATE_SETTINGS, { weeklyMealCap: value });
+      toast.show('Weekly cap updated.', 'success');
+      setCapEditing(false);
+      refetchSettings();
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setCapSaving(false);
+    }
+  };
 
   return (
     <Screen
@@ -107,61 +268,11 @@ export function AdminDashboardScreen() {
       headerRight={<SignOutButton />}
       refreshing={loading}
       onRefresh={load}>
-      {loading && weekOrders.length === 0 ? (
+      {loading && expenseOrders.length === 0 ? (
         <Loader label="Crunching numbers…" />
       ) : (
         <>
-          {/* Today */}
-          <View style={styles.statRow}>
-            <Card style={styles.statCard}>
-              <Text style={styles.statValue}>{todayOrders.length}</Text>
-              <Text style={styles.statLabel}>Confirmed meals today</Text>
-            </Card>
-            <Card style={styles.statCard}>
-              <Text style={styles.statValue}>₹{Math.round(todayCost.total)}</Text>
-              <Text style={styles.statLabel}>Today's spend</Text>
-            </Card>
-          </View>
-
-          {/* This week expenses */}
-          <Card title="This week" subtitle="Monday to Sunday">
-            <View style={styles.bigMoneyRow}>
-              <View>
-                <Text style={styles.bigMoney}>₹{Math.round(weekCost.total)}</Text>
-                <Text style={styles.statLabel}>Total confirmed spend</Text>
-              </View>
-              <View style={styles.avgPill}>
-                <Text style={styles.avgValue}>₹{Math.round(weekAvg)}</Text>
-                <Text style={styles.avgLabel}>avg / person</Text>
-              </View>
-            </View>
-          </Card>
-
-          {/* Meals breakdown for today */}
-          <Card title="Today's confirmed orders" padded={false}>
-            {todayOrders.length === 0 ? (
-              <Text style={styles.emptyRow}>No orders confirmed yet today.</Text>
-            ) : (
-              todayOrders
-                .slice()
-                .sort((a, b) => a.mealType.localeCompare(b.mealType))
-                .map(o => (
-                  <View key={o._id} style={styles.mealLine}>
-                    <Text style={styles.mealLineIcon}>
-                      {mealMeta[o.mealType].icon}
-                    </Text>
-                    <Text style={styles.mealLineLabel}>
-                      {mealMeta[o.mealType].label}
-                    </Text>
-                    <Text style={styles.mealLineCount}>
-                      {o.items.length} item{o.items.length === 1 ? '' : 's'}
-                    </Text>
-                  </View>
-                ))
-            )}
-          </Card>
-
-          {/* Team summary */}
+          {/* Team Summary */}
           <Card title="Team">
             <View style={styles.summaryRow}>
               <SummaryStat label="Members" value={users.length} />
@@ -177,14 +288,160 @@ export function AdminDashboardScreen() {
                 ) : (
                   <Badge label="All clear" tone="primary" />
                 )}
-                <Text
-                  style={styles.link}
-                  onPress={() => nav.navigate('Feedback')}>
+                <Text style={styles.link} onPress={() => nav.navigate('Feedback')}>
                   Review →
                 </Text>
               </View>
             </View>
           </Card>
+
+          {/* Weekly Meal Cap */}
+          <SectionLabel>Weekly Meal Price Cap</SectionLabel>
+          <Card>
+            {!capEditing ? (
+              <View style={styles.capRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.capValue}>
+                    {settings.weeklyMealCap != null ? `₹${settings.weeklyMealCap}` : 'No cap set'}
+                  </Text>
+                  <Text style={styles.capSub}>
+                    {settings.weeklyMealCap != null ? 'Per user, per week' : 'Users can order unlimited meals'}
+                  </Text>
+                </View>
+                <Button
+                  title="Edit"
+                  variant="outline"
+                  onPress={() => {
+                    setCapInput(settings.weeklyMealCap != null ? String(settings.weeklyMealCap) : '');
+                    setCapEditing(true);
+                  }}
+                />
+              </View>
+            ) : (
+              <View>
+                <View style={styles.capEditRow}>
+                  <TextInput
+                    style={styles.capInput}
+                    value={capInput}
+                    onChangeText={setCapInput}
+                    placeholder="e.g. 500"
+                    placeholderTextColor={colors.textFaint}
+                    keyboardType="numeric"
+                  />
+                  <Button
+                    title={capSaving ? 'Saving…' : 'Save'}
+                    onPress={() => {
+                      const val = capInput.trim() === '' ? null : parseFloat(capInput);
+                      handleSaveCap(val);
+                    }}
+                    loading={capSaving}
+                  />
+                  <Button title="Cancel" variant="outline" onPress={() => setCapEditing(false)} />
+                </View>
+                {settings.weeklyMealCap != null && (
+                  <Button
+                    title="Remove cap"
+                    variant="danger"
+                    onPress={() => handleSaveCap(null)}
+                    loading={capSaving}
+                    style={{ marginTop: spacing.sm }}
+                    fullWidth
+                  />
+                )}
+              </View>
+            )}
+          </Card>
+
+          {/* Expenses */}
+          <SectionLabel>Expenses</SectionLabel>
+          <Card>
+            <PeriodSelector
+              value={expensePeriod}
+              onChange={setExpensePeriod}
+              customStart={expCustomStart}
+              customEnd={expCustomEnd}
+              onCustomStartChange={setExpCustomStart}
+              onCustomEndChange={setExpCustomEnd}
+            />
+            <Text style={styles.bigMoney}>₹{Math.round(expenseData.total)}</Text>
+            <Text style={styles.statLabel}>
+              {expenseOrders.length} confirmed meal{expenseOrders.length !== 1 ? 's' : ''}
+              {expenseData.perPerson.length > 0 && ` · avg ₹${Math.round(expenseData.total / expenseData.perPerson.length)} / person`}
+            </Text>
+            {expenseData.perPerson.length > 0 && (
+              <View style={styles.personList}>
+                {expenseData.perPerson.map(p => (
+                  <View key={p.userId} style={styles.personRow}>
+                    <Text style={styles.personName}>{p.userName}</Text>
+                    <Text style={styles.personCost}>₹{Math.round(p.total)}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </Card>
+
+          {/* Dish Breakdown */}
+          <SectionLabel>Dish-wise Breakdown</SectionLabel>
+          <Card>
+            <PeriodSelector
+              value={dishPeriod}
+              onChange={setDishPeriod}
+              customStart={dishCustomStart}
+              customEnd={dishCustomEnd}
+              onCustomStartChange={setDishCustomStart}
+              onCustomEndChange={setDishCustomEnd}
+            />
+            {dishData.length === 0 ? (
+              <Text style={styles.emptyText}>No orders in this period.</Text>
+            ) : (
+              dishData.map((d, i) => (
+                <View key={i} style={styles.dishRow}>
+                  <Text style={styles.dishName}>{d.name}</Text>
+                  <Text style={styles.dishQty}>{d.quantity} {d.unit}</Text>
+                </View>
+              ))
+            )}
+          </Card>
+
+          {/* Per-User Cost */}
+          <SectionLabel>Per-User Cost</SectionLabel>
+          <Card title="This Week" subtitle={`${weekStartStr} to ${weekEndStr}`}>
+            <Text style={styles.bigMoney}>₹{Math.round(userWeekExpense.total)}</Text>
+            {userWeekExpense.perPerson.length > 0 ? (
+              <View style={styles.personList}>
+                {userWeekExpense.perPerson.map(p => {
+                  const overCap = settings.weeklyMealCap != null && p.total > settings.weeklyMealCap;
+                  return (
+                    <View key={p.userId} style={styles.personRow}>
+                      <Text style={styles.personName}>{p.userName}</Text>
+                      <Text style={[styles.personCost, overCap && { color: colors.danger }]}>
+                        ₹{Math.round(p.total)}
+                        {settings.weeklyMealCap != null && ` / ₹${settings.weeklyMealCap}`}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : <Text style={styles.emptyText}>No data.</Text>}
+          </Card>
+
+          <Card title="This Month" subtitle={`${monthStartStr} to ${monthEndStr}`}>
+            <Text style={styles.bigMoney}>₹{Math.round(userMonthExpense.total)}</Text>
+            {userMonthExpense.perPerson.length > 0 ? (
+              <View style={styles.personList}>
+                {userMonthExpense.perPerson.map(p => (
+                  <View key={p.userId} style={styles.personRow}>
+                    <Text style={styles.personName}>{p.userName}</Text>
+                    <Text style={styles.personCost}>₹{Math.round(p.total)}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : <Text style={styles.emptyText}>No data.</Text>}
+          </Card>
+
+          <Text style={styles.footerNote}>
+            Based on confirmed orders and menu item prices.
+          </Text>
         </>
       )}
     </Screen>
@@ -201,56 +458,57 @@ function SummaryStat({ label, value }: { label: string; value: number }) {
 }
 
 const styles = StyleSheet.create({
-  statRow: { flexDirection: 'row', gap: spacing.md },
-  statCard: { flex: 1, padding: spacing.lg },
-  statValue: { color: colors.primary, fontSize: 28, fontWeight: '900' },
-  statLabel: { color: colors.textMuted, fontSize: font.small, marginTop: 4 },
-
-  bigMoneyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  bigMoney: { color: colors.text, fontSize: 30, fontWeight: '900' },
-  avgPill: {
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-  },
-  avgValue: { color: colors.primary, fontSize: font.h3, fontWeight: '800' },
-  avgLabel: { color: colors.primary, fontSize: font.tiny, marginTop: 2 },
-
-  emptyRow: {
-    color: colors.textFaint,
-    fontStyle: 'italic',
-    padding: spacing.lg,
-    fontSize: font.small,
-  },
-  mealLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  mealLineIcon: { fontSize: 16, marginRight: spacing.sm },
-  mealLineLabel: { color: colors.text, fontSize: font.body, flex: 1, fontWeight: '600' },
-  mealLineCount: { color: colors.textMuted, fontSize: font.small },
-
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
   summaryStat: { alignItems: 'center', flex: 1 },
   summaryValue: { color: colors.text, fontSize: font.h2, fontWeight: '800' },
   summaryLabel: { color: colors.textMuted, fontSize: font.small, marginTop: 2 },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.lg },
-  feedbackRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+  feedbackRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   feedbackText: { color: colors.text, fontSize: font.body },
   feedbackRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   link: { color: colors.primary, fontSize: font.small, fontWeight: '700' },
+
+  bigMoney: { color: colors.text, fontSize: 28, fontWeight: '900' },
+  statLabel: { color: colors.textMuted, fontSize: font.small, marginTop: 4, marginBottom: spacing.sm },
+
+  personList: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: spacing.sm, paddingTop: spacing.sm },
+  personRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
+  personName: { color: colors.text, fontSize: font.body, flex: 1 },
+  personCost: { color: colors.primary, fontSize: font.body, fontWeight: '700' },
+
+  dishRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  dishName: { color: colors.text, fontSize: font.body, flex: 1 },
+  dishQty: { color: colors.primary, fontSize: font.small, fontWeight: '700' },
+
+  emptyText: { color: colors.textFaint, fontSize: font.small, fontStyle: 'italic' },
+
+  capRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  capValue: { color: colors.text, fontSize: 22, fontWeight: '800' },
+  capSub: { color: colors.textMuted, fontSize: font.small, marginTop: 2 },
+  capEditRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  capInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    color: colors.text,
+    fontSize: font.body,
+  },
+
+  footerNote: {
+    color: colors.textFaint,
+    fontSize: font.tiny,
+    textAlign: 'center',
+    marginTop: spacing.md,
+    marginBottom: spacing.xl,
+  },
 });

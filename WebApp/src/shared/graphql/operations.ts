@@ -329,6 +329,43 @@ export const MARK_MEAL_DONE = gql`
   }
 `
 
+export const CONFIRMED_ORDERS_FOR_RANGE = gql`
+  query ConfirmedOrdersForRange($startDate: String!, $endDate: String!) {
+    confirmedOrdersForRange(startDate: $startDate, endDate: $endDate) {
+      id
+      date
+      mealType
+      items {
+        menuItemId
+        name
+        unit
+        quantity
+        personBreakdown { userId userName quantity }
+      }
+      confirmedBy
+      confirmedAt
+    }
+  }
+`
+
+export const GET_SETTINGS = gql`
+  query GetSettings {
+    getSettings {
+      weeklyMealCap
+      updatedAt
+    }
+  }
+`
+
+export const UPDATE_SETTINGS = gql`
+  mutation UpdateSettings($weeklyMealCap: Float) {
+    updateSettings(weeklyMealCap: $weeklyMealCap) {
+      weeklyMealCap
+      updatedAt
+    }
+  }
+`
+
 export const MEAL_DONE_STATUS = gql`
   query MealDoneStatus($date: String!, $mealType: MealType!) {
     mealDoneStatus(date: $date, mealType: $mealType) {

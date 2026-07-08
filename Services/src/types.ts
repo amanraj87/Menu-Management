@@ -85,6 +85,13 @@ export interface MealDoneDoc {
   markedAt: Date
 }
 
+export interface SettingsDoc {
+  _id: ObjectId
+  weeklyMealCap: number | null
+  updatedAt: Date
+  updatedBy: ObjectId
+}
+
 export interface ContextUser {
   userId: string
   role: 'person' | 'admin' | 'vendor'

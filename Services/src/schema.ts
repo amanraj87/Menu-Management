@@ -82,6 +82,11 @@ export const typeDefs = `#graphql
     markedAt: String!
   }
 
+  type Settings {
+    weeklyMealCap: Float
+    updatedAt: String
+  }
+
   type Feedback {
     id: ID!
     userId: ID!
@@ -167,6 +172,10 @@ export const typeDefs = `#graphql
     mySelectionsForWeek(startDate: String!): [Selection!]!
     aggregatedOrder(date: String!, mealType: MealType!): AggregatedOrder!
     confirmedOrders(date: String!): [ConfirmedOrder!]!
+    """Confirmed orders for a date range (inclusive)."""
+    confirmedOrdersForRange(startDate: String!, endDate: String!): [ConfirmedOrder!]!
+    """App settings (weekly meal cap etc.)."""
+    getSettings: Settings!
     """Meal opt-outs for 7 days starting at startDate, for current user."""
     myMealOptOuts(startDate: String!): [MealOptOut!]!
     """Current user's meal-done marks for 7 days starting at startDate."""
@@ -199,5 +208,7 @@ export const typeDefs = `#graphql
     createFeedback(input: CreateFeedbackInput!): Feedback!
     confirmFeedback(id: ID!): Feedback!
     rejectFeedback(id: ID!): Feedback!
+    """Admin: set the weekly meal price cap (null to disable)."""
+    updateSettings(weeklyMealCap: Float): Settings!
   }
 `

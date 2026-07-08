@@ -27,6 +27,9 @@ import {
   MY_MEAL_DONE_FOR_WEEK,
   MARK_MEAL_DONE,
   MEAL_DONE_STATUS,
+  CONFIRMED_ORDERS_FOR_RANGE,
+  GET_SETTINGS,
+  UPDATE_SETTINGS,
 } from './operations'
 import { toUser, toMenuItem, toSelection, toAggregatedOrder, toConfirmedOrder, toFeedback } from './mappers'
 import type { MealType, UserRole } from '@/shared/types'
@@ -365,4 +368,36 @@ export function useMealDoneStatus(date: string, mealType: MealType) {
   })
   const doneUsers = (data?.mealDoneStatus ?? []).map(d => ({ userId: d.userId, userName: d.userName, mealType: d.mealType as MealType, markedAt: d.markedAt }))
   return { doneUsers, isLoading: loading, error, refetch }
+}
+
+interface ConfirmedOrdersForRangeData { confirmedOrdersForRange: Array<{ id: string; date: string; mealType: string; items: Array<{ menuItemId: string; name: string; unit: string; quantity: number; personBreakdown: Array<{ userId: string; userName: string; quantity: number }> }>; confirmedBy: string; confirmedAt: string }> }
+export function useConfirmedOrdersForRange(startDate: string, endDate: string) {
+  const { data, loading, error } = useQuery<ConfirmedOrdersForRangeData>(CONFIRMED_ORDERS_FOR_RANGE, {
+    variables: { startDate, endDate },
+    skip: !startDate || !endDate,
+  })
+  const orders = (data?.confirmedOrdersForRange ?? []).map(toConfirmedOrder)
+  return { orders, isLoading: loading, error }
+}
+
+interface SettingsData { getSettings: { weeklyMealCap: number | null; updatedAt: string | null } }
+export function useSettings() {
+  const { data, loading, error, refetch } = useQuery<SettingsData>(GET_SETTINGS)
+  return { settings: data?.getSettings ?? { weeklyMealCap: null, updatedAt: null }, isLoading: loading, error, refetch }
+}
+
+export function useUpdateSettings(onSuccess?: () => void, onError?: (e: Error) => void) {
+  const client = useApolloClient()
+  const [mutate, result] = useMutation(UPDATE_SETTINGS, {
+    onCompleted: () => {
+      void client.refetchQueries({ include: [GET_SETTINGS] })
+      onSuccess?.()
+    },
+    onError: (e: Error) => onError?.(e),
+  })
+  return {
+    updateSettings: (weeklyMealCap: number | null) => mutate({ variables: { weeklyMealCap } }),
+    isPending: result.loading,
+    error: result.error,
+  }
 }
