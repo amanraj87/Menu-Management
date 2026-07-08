@@ -265,6 +265,20 @@ export const CONFIRM_FEEDBACK = gql`
   }
 `
 
+export const REJECT_FEEDBACK = gql`
+  mutation RejectFeedback($id: ID!) {
+    rejectFeedback(id: $id) {
+      id
+      userId
+      userName
+      text
+      status
+      createdAt
+      confirmedAt
+    }
+  }
+`
+
 export const CONFIRMED_FEEDBACKS = gql`
   query ConfirmedFeedbacks {
     confirmedFeedbacks {

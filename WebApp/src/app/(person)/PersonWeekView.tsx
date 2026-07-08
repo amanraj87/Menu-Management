@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Card, Button, Loader } from '@/shared/ui'
 import type { MealType, MenuItem } from '@/shared/types'
 import { useMutation } from '@apollo/client/react'
-import { useMenuItems, useMySelectionsForWeek, useMyMealOptOuts, useToggleMealOptOut, useMyMealDoneForWeek, useMarkMealDone } from '@/shared/graphql/hooks'
+import { useMenuItems, useMySelectionsForWeek, useMyMealOptOuts, useToggleMealOptOut } from '@/shared/graphql/hooks'
 import { useApolloClient } from '@apollo/client/react'
 import { MY_SELECTIONS_FOR_WEEK, PUT_SELECTION } from '@/shared/graphql/operations'
 import { useToastStore } from '@/shared/stores/toastStore'
@@ -79,10 +79,7 @@ export function PersonWeekView() {
   const { selections, isLoading: weekLoading } = useMySelectionsForWeek(startDate)
   const { optOuts } = useMyMealOptOuts(startDate)
   const { mutate: toggleOptOutMutate } = useToggleMealOptOut()
-  const { doneList } = useMyMealDoneForWeek(startDate)
-  const { mutate: markDoneMutate } = useMarkMealDone()
   const [localOptOuts, setLocalOptOuts] = useState<Set<string>>(new Set())
-  const [localDone, setLocalDone] = useState<Set<string>>(new Set())
   const [quantities, setQuantities] = useState<Record<string, number>>({})
 
   const optOutsKey = JSON.stringify(optOuts)
@@ -115,39 +112,6 @@ export function PersonWeekView() {
         return next
       })
       toast.add(e instanceof Error ? e.message : 'Failed to toggle meal', 'error')
-    }
-  }
-
-  const doneListKey = JSON.stringify(doneList)
-  useEffect(() => {
-    const next = new Set<string>()
-    doneList.forEach(d => next.add(`${d.date}-${d.mealType}`))
-    setLocalDone(next)
-  }, [doneListKey])
-
-  const isMealDone = (date: string, mealId: MealType) =>
-    localDone.has(`${date}-${mealId}`)
-
-  const handleMarkDone = async (date: string, mealId: MealType) => {
-    const k = `${date}-${mealId}`
-    const currentlyDone = localDone.has(k)
-    const newDone = !currentlyDone
-    setLocalDone(prev => {
-      const next = new Set(prev)
-      if (newDone) next.add(k)
-      else next.delete(k)
-      return next
-    })
-    try {
-      await markDoneMutate({ variables: { date, mealType: mealId, done: newDone } })
-    } catch (e) {
-      setLocalDone(prev => {
-        const next = new Set(prev)
-        if (currentlyDone) next.add(k)
-        else next.delete(k)
-        return next
-      })
-      toast.add(e instanceof Error ? e.message : 'Failed to mark meal', 'error')
     }
   }
 
@@ -511,34 +475,6 @@ export function PersonWeekView() {
                             </svg>
                           </button>
                         </div>
-                      )}
-                      {dateStr <= toDateString(new Date()) && (
-                        <button
-                          type="button"
-                          onClick={() => handleMarkDone(dateStr, meal.id)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.4rem',
-                            marginTop: '0.5rem',
-                            padding: '0.4rem 0.75rem',
-                            border: '1px solid',
-                            borderColor: isMealDone(dateStr, meal.id) ? 'var(--color-primary, #22c55e)' : 'var(--color-border)',
-                            borderRadius: 6,
-                            background: isMealDone(dateStr, meal.id) ? 'rgba(34,197,94,0.08)' : 'transparent',
-                            color: isMealDone(dateStr, meal.id) ? 'var(--color-primary, #22c55e)' : 'var(--color-text-muted)',
-                            cursor: 'pointer',
-                            fontSize: '0.8rem',
-                            fontWeight: 600,
-                            fontFamily: 'inherit',
-                            transition: 'all 0.2s',
-                            width: '100%',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <span>{isMealDone(dateStr, meal.id) ? '✓' : '○'}</span>
-                          <span>{isMealDone(dateStr, meal.id) ? 'Eaten' : 'Mark as eaten'}</span>
-                        </button>
                       )}
                     </>
                   )}

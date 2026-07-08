@@ -63,7 +63,7 @@ export interface FeedbackDoc {
   userId: ObjectId
   userName: string
   text: string
-  status: 'pending' | 'confirmed'
+  status: 'pending' | 'confirmed' | 'rejected'
   createdAt: Date
   confirmedBy?: ObjectId
   confirmedAt?: Date

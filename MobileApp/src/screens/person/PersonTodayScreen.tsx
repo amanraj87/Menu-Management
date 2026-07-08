@@ -1,11 +1,14 @@
-import React, { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Screen } from '../../ui/Screen';
 import { Button, Card, EmptyState, Loader } from '../../ui';
 import { SignOutButton } from '../../ui/SignOutButton';
-import { useMenuItems, useMySelectionsForWeek } from '../../api/hooks';
+import { useMenuItems, useMySelectionsForWeek, useMyMealDoneForWeek } from '../../api/hooks';
+import { gqlRequest } from '../../api/client';
+import { MARK_MEAL_DONE } from '../../api/operations';
 import { useSession } from '../../context/SessionContext';
+import { useToast } from '../../context/ToastContext';
 import { colors, font, mealMeta, radius, spacing } from '../../theme';
 import { formatLong, todayISO, weekStart } from '../../utils/date';
 import { MEAL_TYPES, type MealType } from '../../types';
@@ -13,16 +16,55 @@ import { MEAL_TYPES, type MealType } from '../../types';
 export function PersonTodayScreen() {
   const nav = useNavigation<any>();
   const { session } = useSession();
+  const toast = useToast();
   const today = todayISO();
   const start = weekStart(today);
 
   const menu = useMenuItems();
   const sel = useMySelectionsForWeek(start);
+  const doneQuery = useMyMealDoneForWeek(start);
+  const [localDone, setLocalDone] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const next = new Set<string>();
+    doneQuery.doneList.forEach(d => next.add(`${d.date}|${d.mealType}`));
+    setLocalDone(next);
+  }, [JSON.stringify(doneQuery.doneList)]);
+
+  const isMealDone = (meal: MealType) => localDone.has(`${today}|${meal}`);
+
+  const handleMarkDone = async (meal: MealType) => {
+    const k = `${today}|${meal}`;
+    const currentlyDone = localDone.has(k);
+    const newDone = !currentlyDone;
+    setLocalDone(prev => {
+      const next = new Set(prev);
+      if (newDone) next.add(k);
+      else next.delete(k);
+      return next;
+    });
+    try {
+      await gqlRequest(MARK_MEAL_DONE, {
+        date: today,
+        mealType: meal,
+        done: newDone,
+      });
+    } catch (e) {
+      setLocalDone(prev => {
+        const next = new Set(prev);
+        if (currentlyDone) next.add(k);
+        else next.delete(k);
+        return next;
+      });
+      toast.show((e as Error).message, 'error');
+    }
+  };
 
   const loading = menu.loading || sel.loading;
   const refetch = () => {
     menu.refetch();
     sel.refetch();
+    doneQuery.refetch();
   };
 
   const itemMap = useMemo(() => {
@@ -76,7 +118,11 @@ export function PersonTodayScreen() {
                 <View style={styles.mealHeader}>
                   <Text style={styles.mealIcon}>{meta.icon}</Text>
                   <Text style={styles.mealTitle}>{meta.label}</Text>
-                  <View style={[styles.dot, { backgroundColor: meta.accent }]} />
+                  <Pressable onPress={() => handleMarkDone(meal)}>
+                    <Text style={styles.doneEmoji}>
+                      {isMealDone(meal) ? '😋' : '🍔'}
+                    </Text>
+                  </Pressable>
                 </View>
                 {rows.length === 0 ? (
                   <Text style={styles.emptyRow}>No items selected</Text>
@@ -125,7 +171,7 @@ const styles = StyleSheet.create({
   },
   mealIcon: { fontSize: 18, marginRight: spacing.sm },
   mealTitle: { color: colors.text, fontSize: font.h3, fontWeight: '700', flex: 1 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
+  doneEmoji: { fontSize: 22 },
   emptyRow: {
     color: colors.textFaint,
     fontSize: font.small,

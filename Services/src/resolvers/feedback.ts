@@ -78,6 +78,25 @@ export async function confirmFeedback(
   return toFeedback(result)
 }
 
+export async function rejectFeedback(
+  _: unknown,
+  args: { id: string },
+  context: { user?: ContextUser }
+): Promise<Record<string, unknown>> {
+  const user = context.user
+  if (!user || user.role !== 'admin') throw new Error('Unauthorized: admin role required')
+
+  const db = getDb()
+  const id = new ObjectId(args.id)
+  const result = await db.collection(COLLECTIONS.feedback).findOneAndUpdate(
+    { _id: id, status: 'pending' },
+    { $set: { status: 'rejected', rejectedBy: new ObjectId(user.userId), rejectedAt: new Date() } },
+    { returnDocument: 'after' }
+  ) as FeedbackDoc | null
+  if (!result) throw new Error('Feedback not found or already processed')
+  return toFeedback(result)
+}
+
 export async function confirmedFeedbacks(
   _: unknown,
   __: unknown,

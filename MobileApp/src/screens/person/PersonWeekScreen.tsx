@@ -12,9 +12,9 @@ import {
 import { Sheet } from '../../ui/Sheet';
 import { Input } from '../../ui';
 import { SignOutButton } from '../../ui/SignOutButton';
-import { useMenuItems, useMySelectionsForWeek, useMyMealOptOuts, useMyMealDoneForWeek } from '../../api/hooks';
+import { useMenuItems, useMySelectionsForWeek, useMyMealOptOuts } from '../../api/hooks';
 import { gqlRequest } from '../../api/client';
-import { MY_SELECTIONS_FOR_WEEK, PUT_SELECTION, TOGGLE_MEAL_OPT_OUT, MY_MEAL_OPT_OUTS, MARK_MEAL_DONE, MY_MEAL_DONE_FOR_WEEK } from '../../api/operations';
+import { MY_SELECTIONS_FOR_WEEK, PUT_SELECTION, TOGGLE_MEAL_OPT_OUT, MY_MEAL_OPT_OUTS } from '../../api/operations';
 import { useToast } from '../../context/ToastContext';
 import { colors, font, mealMeta, radius, spacing } from '../../theme';
 import {
@@ -116,9 +116,7 @@ export function PersonWeekScreen() {
   const menu = useMenuItems();
   const sel = useMySelectionsForWeek(start);
   const optOutsQuery = useMyMealOptOuts(start);
-  const doneQuery = useMyMealDoneForWeek(start);
   const [localOptOuts, setLocalOptOuts] = useState<Set<string>>(new Set());
-  const [localDone, setLocalDone] = useState<Set<string>>(new Set());
   const days = useMemo(() => weekDays(start), [start]);
 
   useEffect(() => {
@@ -150,42 +148,6 @@ export function PersonWeekScreen() {
       setLocalOptOuts(prev => {
         const next = new Set(prev);
         if (currentlyOptedOut) next.add(k);
-        else next.delete(k);
-        return next;
-      });
-      toast.show((e as Error).message, 'error');
-    }
-  };
-
-  useEffect(() => {
-    const next = new Set<string>();
-    doneQuery.doneList.forEach(d => next.add(`${d.date}|${d.mealType}`));
-    setLocalDone(next);
-  }, [JSON.stringify(doneQuery.doneList)]);
-
-  const isMealDone = (date: string, meal: MealType) =>
-    localDone.has(`${date}|${meal}`);
-
-  const handleMarkDone = async (date: string, meal: MealType) => {
-    const k = `${date}|${meal}`;
-    const currentlyDone = localDone.has(k);
-    const newDone = !currentlyDone;
-    setLocalDone(prev => {
-      const next = new Set(prev);
-      if (newDone) next.add(k);
-      else next.delete(k);
-      return next;
-    });
-    try {
-      await gqlRequest(MARK_MEAL_DONE, {
-        date,
-        mealType: meal,
-        done: newDone,
-      });
-    } catch (e) {
-      setLocalDone(prev => {
-        const next = new Set(prev);
-        if (currentlyDone) next.add(k);
         else next.delete(k);
         return next;
       });
@@ -423,26 +385,6 @@ export function PersonWeekScreen() {
                     }}>
                     <Text style={styles.addText}>＋ Add an item</Text>
                   </Pressable>
-
-                  {activeDay <= todayISO() && (
-                    <Pressable
-                      style={[
-                        styles.doneRow,
-                        isMealDone(activeDay, meal) && styles.doneRowActive,
-                      ]}
-                      onPress={() => handleMarkDone(activeDay, meal)}>
-                      <Text style={styles.doneIcon}>
-                        {isMealDone(activeDay, meal) ? '✓' : '○'}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.doneText,
-                          isMealDone(activeDay, meal) && styles.doneTextActive,
-                        ]}>
-                        {isMealDone(activeDay, meal) ? 'Eaten' : 'Mark as eaten'}
-                      </Text>
-                    </Pressable>
-                  )}
                 </>
               )}
             </Card>
@@ -607,31 +549,6 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   addText: { color: colors.primary, fontSize: font.small, fontWeight: '700' },
-  doneRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: spacing.sm,
-  },
-  doneRowActive: {
-    backgroundColor: 'rgba(34,197,94,0.08)',
-  },
-  doneIcon: {
-    fontSize: 16,
-    color: colors.textMuted,
-  },
-  doneText: {
-    color: colors.textMuted,
-    fontSize: font.small,
-    fontWeight: '600',
-  },
-  doneTextActive: {
-    color: colors.success,
-    fontWeight: '700',
-  },
 
   sheetList: { marginTop: spacing.sm },
   sheetItem: {

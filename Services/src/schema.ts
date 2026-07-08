@@ -198,5 +198,6 @@ export const typeDefs = `#graphql
     markMealDone(date: String!, mealType: MealType!, done: Boolean!): Boolean!
     createFeedback(input: CreateFeedbackInput!): Feedback!
     confirmFeedback(id: ID!): Feedback!
+    rejectFeedback(id: ID!): Feedback!
   }
 `

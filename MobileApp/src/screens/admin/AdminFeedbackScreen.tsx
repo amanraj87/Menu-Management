@@ -5,7 +5,7 @@ import { Badge, Button, Card, EmptyState, Loader, SectionLabel } from '../../ui'
 import { SignOutButton } from '../../ui/SignOutButton';
 import { useFeedbacksForAdmin } from '../../api/hooks';
 import { gqlRequest } from '../../api/client';
-import { CONFIRM_FEEDBACK } from '../../api/operations';
+import { CONFIRM_FEEDBACK, REJECT_FEEDBACK } from '../../api/operations';
 import { useToast } from '../../context/ToastContext';
 import { colors, font, spacing } from '../../theme';
 import { formatDateTime } from '../../utils/date';
@@ -38,6 +38,24 @@ export function AdminFeedbackScreen() {
     }
   };
 
+  const reject = async (id: string) => {
+    setBusyId(id);
+    try {
+      await gqlRequest(REJECT_FEEDBACK, { id });
+      toast.show('Feedback rejected.', 'success');
+      refetch();
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const rejected = useMemo(
+    () => feedbacks.filter(f => f.status === 'rejected'),
+    [feedbacks],
+  );
+
   return (
     <Screen
       title="Feedback"
@@ -65,9 +83,9 @@ export function AdminFeedbackScreen() {
               <FeedbackCard
                 key={f._id}
                 feedback={f}
-                actionLabel="Confirm & send to vendor"
                 busy={busyId === f._id}
-                onAction={() => confirm(f._id)}
+                onConfirm={() => confirm(f._id)}
+                onReject={() => reject(f._id)}
               />
             ))
           )}
@@ -81,6 +99,16 @@ export function AdminFeedbackScreen() {
               ))}
             </>
           ) : null}
+
+          {rejected.length > 0 ? (
+            <>
+              <View style={styles.gap} />
+              <SectionLabel>Rejected ({rejected.length})</SectionLabel>
+              {rejected.map(f => (
+                <FeedbackCard key={f._id} feedback={f} />
+              ))}
+            </>
+          ) : null}
         </>
       )}
     </Screen>
@@ -89,15 +117,17 @@ export function AdminFeedbackScreen() {
 
 function FeedbackCard({
   feedback,
-  actionLabel,
   busy,
-  onAction,
+  onConfirm,
+  onReject,
 }: {
   feedback: Feedback;
-  actionLabel?: string;
   busy?: boolean;
-  onAction?: () => void;
+  onConfirm?: () => void;
+  onReject?: () => void;
 }) {
+  const statusLabel = feedback.status === 'confirmed' ? 'Confirmed' : feedback.status === 'rejected' ? 'Rejected' : 'Pending';
+  const statusTone = feedback.status === 'confirmed' ? 'primary' : feedback.status === 'rejected' ? 'danger' : 'warning';
   return (
     <Card>
       <View style={styles.head}>
@@ -105,21 +135,27 @@ function FeedbackCard({
           <Text style={styles.author}>{feedback.userName}</Text>
           <Text style={styles.time}>{formatDateTime(feedback.createdAt)}</Text>
         </View>
-        <Badge
-          label={feedback.status === 'confirmed' ? 'Confirmed' : 'Pending'}
-          tone={feedback.status === 'confirmed' ? 'primary' : 'warning'}
-        />
+        <Badge label={statusLabel} tone={statusTone as any} />
       </View>
       <Text style={styles.text}>{feedback.text}</Text>
-      {actionLabel ? (
-        <Button
-          title={actionLabel}
-          icon="✓"
-          onPress={onAction}
-          loading={busy}
-          fullWidth
-          style={styles.action}
-        />
+      {onConfirm && onReject ? (
+        <View style={styles.actionRow}>
+          <Button
+            title="Confirm"
+            icon="✓"
+            onPress={onConfirm}
+            loading={busy}
+            style={styles.actionBtn}
+          />
+          <Button
+            title="Reject"
+            icon="✕"
+            variant="danger"
+            onPress={onReject}
+            loading={busy}
+            style={styles.actionBtn}
+          />
+        </View>
       ) : null}
     </Card>
   );
@@ -135,7 +171,8 @@ const styles = StyleSheet.create({
   author: { color: colors.text, fontSize: font.body, fontWeight: '700' },
   time: { color: colors.textFaint, fontSize: font.tiny, marginTop: 2 },
   text: { color: colors.textMuted, fontSize: font.body, lineHeight: 21 },
-  action: { marginTop: spacing.lg },
+  actionRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
+  actionBtn: { flex: 1 },
   allClear: { color: colors.textMuted, fontSize: font.body, textAlign: 'center' },
   gap: { height: spacing.sm },
 });

@@ -20,6 +20,7 @@ import {
   CREATE_FEEDBACK,
   FEEDBACKS_FOR_ADMIN,
   CONFIRM_FEEDBACK,
+  REJECT_FEEDBACK,
   CONFIRMED_FEEDBACKS,
   MY_MEAL_OPT_OUTS,
   TOGGLE_MEAL_OPT_OUT,
@@ -294,6 +295,22 @@ export function useConfirmFeedback(onSuccess?: () => void, onError?: (e: Error) 
   })
   return {
     confirmFeedback: (id: string) => mutate({ variables: { id } }),
+    isPending: result.loading,
+    error: result.error,
+  }
+}
+
+export function useRejectFeedback(onSuccess?: () => void, onError?: (e: Error) => void) {
+  const client = useApolloClient()
+  const [mutate, result] = useMutation(REJECT_FEEDBACK, {
+    onCompleted: () => {
+      void client.refetchQueries({ include: [FEEDBACKS_FOR_ADMIN] })
+      onSuccess?.()
+    },
+    onError: (e: Error) => onError?.(e),
+  })
+  return {
+    rejectFeedback: (id: string) => mutate({ variables: { id } }),
     isPending: result.loading,
     error: result.error,
   }

@@ -136,6 +136,14 @@ export const CONFIRM_FEEDBACK = `
   }
 `;
 
+export const REJECT_FEEDBACK = `
+  mutation RejectFeedback($id: ID!) {
+    rejectFeedback(id: $id) {
+      id userId userName text status createdAt confirmedAt
+    }
+  }
+`;
+
 export const CONFIRMED_FEEDBACKS = `
   query ConfirmedFeedbacks {
     confirmedFeedbacks { id userId userName text status createdAt confirmedAt }

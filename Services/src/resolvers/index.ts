@@ -38,5 +38,6 @@ export const resolvers = {
     confirmOrderWithItems: orders.confirmOrderWithItems,
     createFeedback: feedback.createFeedback,
     confirmFeedback: feedback.confirmFeedback,
+    rejectFeedback: feedback.rejectFeedback,
   },
 }
