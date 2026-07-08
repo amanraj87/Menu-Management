@@ -317,7 +317,6 @@ export function VendorMenuManager() {
                 <Th>Name</Th>
                 <Th>Unit</Th>
                 <Th>Price per unit</Th>
-                <Th aria-label="Edit" />
                 <Th aria-label="Remove" />
               </Tr>
             </Thead>
@@ -327,9 +326,6 @@ export function VendorMenuManager() {
                   <Td>{row.name}</Td>
                   <Td>{row.unit}</Td>
                   <Td>{row.pricePerUnit != null ? row.pricePerUnit : '—'}</Td>
-                  <Td>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => openEdit(row)}>Edit</button>
-                  </Td>
                   <Td>
                     <button
                       type="button"

@@ -337,9 +337,6 @@ export function VendorMenuScreen() {
                   {item.pricePerUnit != null ? ` · ₹${item.pricePerUnit}` : ''}
                 </Text>
               </View>
-              <Pressable onPress={() => openEdit(item)} hitSlop={6} style={styles.iconBtn}>
-                <Text style={styles.editText}>Edit</Text>
-              </Pressable>
               <Pressable
                 onPress={() => confirmDelete(item)}
                 hitSlop={6}

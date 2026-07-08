@@ -129,10 +129,6 @@ export function AdminDashboard() {
   const { orders: expenseOrders, isLoading: expenseOrdersLoading } = useConfirmedOrdersForRange(expStart, expEnd)
   const { orders: dishOrders, isLoading: dishOrdersLoading } = useConfirmedOrdersForRange(dshStart, dshEnd)
 
-  // Per-user week & month cost
-  const { orders: userWeekOrders } = useConfirmedOrdersForRange(weekStart, weekEnd)
-  const { orders: userMonthOrders } = useConfirmedOrdersForRange(monthStart, monthEnd)
-
   const priceByMenuId = useMemo(() => {
     const map: Record<string, number> = {}
     for (const m of menuItems) {
@@ -145,8 +141,6 @@ export function AdminDashboard() {
 
   const expenseData = useMemo(() => computeExpense(expenseOrders, priceByMenuId), [expenseOrders, priceByMenuId])
   const dishData = useMemo(() => computeDishBreakdown(dishOrders), [dishOrders])
-  const userWeekExpense = useMemo(() => computeExpense(userWeekOrders, priceByMenuId), [userWeekOrders, priceByMenuId])
-  const userMonthExpense = useMemo(() => computeExpense(userMonthOrders, priceByMenuId), [userMonthOrders, priceByMenuId])
 
   const pendingFeedback = feedbacks.filter((f) => f.status === 'pending').length
   const isLoading = usersLoading || feedbackLoading || menuLoading || settingsLoading
@@ -341,65 +335,6 @@ export function AdminDashboard() {
                 </tbody>
               </table>
             )}
-          </div>
-        </section>
-
-        {/* Per-User Cost */}
-        <section style={{ marginBottom: '1.5rem' }}>
-          <h3>Per-User Cost</h3>
-          <div style={{ display: 'grid', gap: '1.25rem', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
-            <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem', background: 'var(--color-surface)' }}>
-              <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>This Week ({weekStart} to {weekEnd})</h4>
-              <p style={{ margin: '0 0 0.5rem', fontSize: '1.25rem', fontWeight: 600 }}>{formatMoney(userWeekExpense.total)}</p>
-              {userWeekExpense.perPerson.length > 0 ? (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                      <th style={{ textAlign: 'left', padding: '0.3rem 0', color: 'var(--color-text-muted)', fontWeight: 600 }}>User</th>
-                      <th style={{ textAlign: 'right', padding: '0.3rem 0', color: 'var(--color-text-muted)', fontWeight: 600 }}>Cost</th>
-                      {settings.weeklyMealCap != null && <th style={{ textAlign: 'right', padding: '0.3rem 0', color: 'var(--color-text-muted)', fontWeight: 600 }}>Cap</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {userWeekExpense.perPerson.map((p) => {
-                      const overCap = settings.weeklyMealCap != null && p.total > settings.weeklyMealCap
-                      return (
-                        <tr key={p.userId} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                          <td style={{ padding: '0.3rem 0' }}>{p.userName}</td>
-                          <td style={{ textAlign: 'right', padding: '0.3rem 0', fontWeight: 500, color: overCap ? 'var(--color-danger, #ef4444)' : undefined }}>{formatMoney(p.total)}</td>
-                          {settings.weeklyMealCap != null && (
-                            <td style={{ textAlign: 'right', padding: '0.3rem 0', color: 'var(--color-text-muted)' }}>{formatMoney(settings.weeklyMealCap)}</td>
-                          )}
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              ) : <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>No data.</p>}
-            </div>
-
-            <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem', background: 'var(--color-surface)' }}>
-              <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>This Month ({monthStart} to {monthEnd})</h4>
-              <p style={{ margin: '0 0 0.5rem', fontSize: '1.25rem', fontWeight: 600 }}>{formatMoney(userMonthExpense.total)}</p>
-              {userMonthExpense.perPerson.length > 0 ? (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                      <th style={{ textAlign: 'left', padding: '0.3rem 0', color: 'var(--color-text-muted)', fontWeight: 600 }}>User</th>
-                      <th style={{ textAlign: 'right', padding: '0.3rem 0', color: 'var(--color-text-muted)', fontWeight: 600 }}>Cost</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {userMonthExpense.perPerson.map((p) => (
-                      <tr key={p.userId} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                        <td style={{ padding: '0.3rem 0' }}>{p.userName}</td>
-                        <td style={{ textAlign: 'right', padding: '0.3rem 0', fontWeight: 500 }}>{formatMoney(p.total)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>No data.</p>}
-            </div>
           </div>
         </section>
 

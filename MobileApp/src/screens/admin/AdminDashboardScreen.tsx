@@ -202,8 +202,6 @@ export function AdminDashboardScreen() {
 
   const [expenseOrders, setExpenseOrders] = useState<ConfirmedOrder[]>([]);
   const [dishOrders, setDishOrders] = useState<ConfirmedOrder[]>([]);
-  const [userWeekOrders, setUserWeekOrders] = useState<ConfirmedOrder[]>([]);
-  const [userMonthOrders, setUserMonthOrders] = useState<ConfirmedOrder[]>([]);
   const [loading, setLoading] = useState(true);
 
   const priceMap = useMemo(() => {
@@ -215,29 +213,23 @@ export function AdminDashboardScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [expRes, dshRes, uwRes, umRes] = await Promise.all([
+      const [expRes, dshRes] = await Promise.all([
         gqlRequest<{ confirmedOrdersForRange: any[] }>(CONFIRMED_ORDERS_FOR_RANGE, { startDate: expStart, endDate: expEnd }),
         gqlRequest<{ confirmedOrdersForRange: any[] }>(CONFIRMED_ORDERS_FOR_RANGE, { startDate: dshStart, endDate: dshEnd }),
-        gqlRequest<{ confirmedOrdersForRange: any[] }>(CONFIRMED_ORDERS_FOR_RANGE, { startDate: weekStartStr, endDate: weekEndStr }),
-        gqlRequest<{ confirmedOrdersForRange: any[] }>(CONFIRMED_ORDERS_FOR_RANGE, { startDate: monthStartStr, endDate: monthEndStr }),
       ]);
       const map = (arr: any[]) => arr.map((o: any) => ({ ...o, _id: o.id }));
       setExpenseOrders(map(expRes.confirmedOrdersForRange ?? []));
       setDishOrders(map(dshRes.confirmedOrdersForRange ?? []));
-      setUserWeekOrders(map(uwRes.confirmedOrdersForRange ?? []));
-      setUserMonthOrders(map(umRes.confirmedOrdersForRange ?? []));
     } catch {
     } finally {
       setLoading(false);
     }
-  }, [expStart, expEnd, dshStart, dshEnd, weekStartStr, weekEndStr, monthStartStr, monthEndStr]);
+  }, [expStart, expEnd, dshStart, dshEnd]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const expenseData = useMemo(() => orderCost(expenseOrders, priceMap), [expenseOrders, priceMap]);
   const dishData = useMemo(() => computeDishBreakdown(dishOrders), [dishOrders]);
-  const userWeekExpense = useMemo(() => orderCost(userWeekOrders, priceMap), [userWeekOrders, priceMap]);
-  const userMonthExpense = useMemo(() => orderCost(userMonthOrders, priceMap), [userMonthOrders, priceMap]);
 
   const roleCounts = useMemo(() => {
     const c = { person: 0, admin: 0, vendor: 0 };
@@ -394,49 +386,15 @@ export function AdminDashboardScreen() {
             {dishData.length === 0 ? (
               <Text style={styles.emptyText}>No orders in this period.</Text>
             ) : (
-              dishData.map((d, i) => (
-                <View key={i} style={styles.dishRow}>
-                  <Text style={styles.dishName}>{d.name}</Text>
-                  <Text style={styles.dishQty}>{d.quantity} {d.unit}</Text>
-                </View>
-              ))
-            )}
-          </Card>
-
-          {/* Per-User Cost */}
-          <SectionLabel>Per-User Cost</SectionLabel>
-          <Card title="This Week" subtitle={`${weekStartStr} to ${weekEndStr}`}>
-            <Text style={styles.bigMoney}>₹{Math.round(userWeekExpense.total)}</Text>
-            {userWeekExpense.perPerson.length > 0 ? (
-              <View style={styles.personList}>
-                {userWeekExpense.perPerson.map(p => {
-                  const overCap = settings.weeklyMealCap != null && p.total > settings.weeklyMealCap;
-                  return (
-                    <View key={p.userId} style={styles.personRow}>
-                      <Text style={styles.personName}>{p.userName}</Text>
-                      <Text style={[styles.personCost, overCap && { color: colors.danger }]}>
-                        ₹{Math.round(p.total)}
-                        {settings.weeklyMealCap != null && ` / ₹${settings.weeklyMealCap}`}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            ) : <Text style={styles.emptyText}>No data.</Text>}
-          </Card>
-
-          <Card title="This Month" subtitle={`${monthStartStr} to ${monthEndStr}`}>
-            <Text style={styles.bigMoney}>₹{Math.round(userMonthExpense.total)}</Text>
-            {userMonthExpense.perPerson.length > 0 ? (
-              <View style={styles.personList}>
-                {userMonthExpense.perPerson.map(p => (
-                  <View key={p.userId} style={styles.personRow}>
-                    <Text style={styles.personName}>{p.userName}</Text>
-                    <Text style={styles.personCost}>₹{Math.round(p.total)}</Text>
+              <View>
+                {dishData.map((d, i) => (
+                  <View key={i} style={styles.dishRow}>
+                    <Text style={styles.dishName}>{d.name}</Text>
+                    <Text style={styles.dishQty}>{d.quantity} {d.unit}</Text>
                   </View>
                 ))}
               </View>
-            ) : <Text style={styles.emptyText}>No data.</Text>}
+            )}
           </Card>
 
           <Text style={styles.footerNote}>
