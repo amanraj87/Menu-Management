@@ -482,7 +482,7 @@ export function VendorMenuManager() {
             }}
           >
             <strong style={{ fontSize: '0.9375rem' }}>{editingDish ? `Edit “${editingDish.name}”` : 'Add a dish'}</strong>
-            {renderFormFields(!editingDish)}
+            {renderFormFields(false)}
             {editingDish && (
               <p className="content-subtitle" style={{ margin: 0, fontSize: '0.8125rem' }}>
                 Applies to: {editingDish.meals.map((m) => MEAL_LABEL[m]).join(', ')}

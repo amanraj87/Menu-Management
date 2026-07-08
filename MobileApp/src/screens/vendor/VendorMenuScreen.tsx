@@ -451,7 +451,7 @@ export function VendorMenuScreen() {
             <Text style={styles.inlineFormTitle}>
               {editingDish ? `Edit “${editingDish.name}”` : 'Add a dish'}
             </Text>
-            {renderForm(!editingDish)}
+            {renderForm(false)}
             {editingDish ? (
               <Text style={styles.appliesTo}>
                 Applies to: {editingDish.meals.map(m => mealMeta[m].label).join(', ')}
