@@ -4,6 +4,7 @@ import * as orders from './orders.js'
 import * as me from './me.js'
 import * as users from './users.js'
 import * as feedback from './feedback.js'
+import * as mealOptOuts from './mealOptOuts.js'
 
 export const resolvers = {
   Query: {
@@ -14,6 +15,7 @@ export const resolvers = {
     menuItem: menuItems.menuItem,
     mySelection: selections.mySelection,
     mySelectionsForWeek: selections.mySelectionsForWeek,
+    myMealOptOuts: mealOptOuts.myMealOptOuts,
     aggregatedOrder: orders.aggregatedOrder,
     confirmedOrders: orders.confirmedOrders,
     feedbacksForAdmin: feedback.feedbacksForAdmin,
@@ -27,6 +29,7 @@ export const resolvers = {
     updateMenuItem: menuItems.updateMenuItem,
     deleteMenuItem: menuItems.deleteMenuItem,
     putSelection: selections.putSelection,
+    toggleMealOptOut: mealOptOuts.toggleMealOptOut,
     confirmOrder: orders.confirmOrder,
     confirmOrderWithItems: orders.confirmOrderWithItems,
     createFeedback: feedback.createFeedback,

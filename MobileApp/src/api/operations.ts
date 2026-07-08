@@ -141,3 +141,15 @@ export const CONFIRMED_FEEDBACKS = `
     confirmedFeedbacks { id userId userName text status createdAt confirmedAt }
   }
 `;
+
+export const MY_MEAL_OPT_OUTS = `
+  query MyMealOptOuts($startDate: String!) {
+    myMealOptOuts(startDate: $startDate) { id userId date mealType }
+  }
+`;
+
+export const TOGGLE_MEAL_OPT_OUT = `
+  mutation ToggleMealOptOut($date: String!, $mealType: MealType!, $optedOut: Boolean!) {
+    toggleMealOptOut(date: $date, mealType: $mealType, optedOut: $optedOut)
+  }
+`;

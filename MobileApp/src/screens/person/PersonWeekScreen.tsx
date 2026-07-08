@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Screen } from '../../ui/Screen';
 import {
   Button,
@@ -12,9 +12,9 @@ import {
 import { Sheet } from '../../ui/Sheet';
 import { Input } from '../../ui';
 import { SignOutButton } from '../../ui/SignOutButton';
-import { useMenuItems, useMySelectionsForWeek } from '../../api/hooks';
+import { useMenuItems, useMySelectionsForWeek, useMyMealOptOuts } from '../../api/hooks';
 import { gqlRequest } from '../../api/client';
-import { MY_SELECTIONS_FOR_WEEK, PUT_SELECTION } from '../../api/operations';
+import { MY_SELECTIONS_FOR_WEEK, PUT_SELECTION, TOGGLE_MEAL_OPT_OUT, MY_MEAL_OPT_OUTS } from '../../api/operations';
 import { useToast } from '../../context/ToastContext';
 import { colors, font, mealMeta, radius, spacing } from '../../theme';
 import {
@@ -32,6 +32,73 @@ import { MEAL_TYPES, type MealType } from '../../types';
 const key = (date: string, meal: MealType, itemId: string) =>
   `${date}|${meal}|${itemId}`;
 
+function MealToggle({
+  value,
+  onToggle,
+  disabled,
+}: {
+  value: boolean;
+  onToggle: () => void;
+  disabled: boolean;
+}) {
+  const anim = React.useRef(new Animated.Value(value ? 1 : 0)).current;
+  React.useEffect(() => {
+    Animated.timing(anim, {
+      toValue: value ? 1 : 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  }, [value, anim]);
+
+  const trackBg = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [colors.secondary, colors.primary],
+  });
+  const thumbLeft = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [2, 20],
+  });
+
+  return (
+    <Pressable onPress={disabled ? undefined : onToggle} hitSlop={6}>
+      <Animated.View
+        style={[
+          toggleStyles.track,
+          { backgroundColor: trackBg },
+          disabled && toggleStyles.trackDisabled,
+        ]}>
+        <Animated.View
+          style={[toggleStyles.thumb, { left: thumbLeft }]}
+        />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+const toggleStyles = StyleSheet.create({
+  track: {
+    width: 40,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+  },
+  trackDisabled: {
+    opacity: 0.4,
+  },
+  thumb: {
+    position: 'absolute',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#fff',
+  },
+});
+
+function canToggleMeal(date: string): boolean {
+  const today = todayISO();
+  return date > today;
+}
+
 export function PersonWeekScreen() {
   const toast = useToast();
   const [start, setStart] = useState(() => weekStart(todayISO()));
@@ -48,7 +115,45 @@ export function PersonWeekScreen() {
 
   const menu = useMenuItems();
   const sel = useMySelectionsForWeek(start);
+  const optOutsQuery = useMyMealOptOuts(start);
+  const [localOptOuts, setLocalOptOuts] = useState<Set<string>>(new Set());
   const days = useMemo(() => weekDays(start), [start]);
+
+  useEffect(() => {
+    const next = new Set<string>();
+    optOutsQuery.optOuts.forEach(o => next.add(`${o.date}|${o.mealType}`));
+    setLocalOptOuts(next);
+  }, [JSON.stringify(optOutsQuery.optOuts)]);
+
+  const isMealOptedOut = (date: string, meal: MealType) =>
+    localOptOuts.has(`${date}|${meal}`);
+
+  const handleToggleMeal = async (date: string, meal: MealType) => {
+    const k = `${date}|${meal}`;
+    const currentlyOptedOut = localOptOuts.has(k);
+    const newOptedOut = !currentlyOptedOut;
+    setLocalOptOuts(prev => {
+      const next = new Set(prev);
+      if (newOptedOut) next.add(k);
+      else next.delete(k);
+      return next;
+    });
+    try {
+      await gqlRequest(TOGGLE_MEAL_OPT_OUT, {
+        date,
+        mealType: meal,
+        optedOut: newOptedOut,
+      });
+    } catch (e) {
+      setLocalOptOuts(prev => {
+        const next = new Set(prev);
+        if (currentlyOptedOut) next.add(k);
+        else next.delete(k);
+        return next;
+      });
+      toast.show((e as Error).message, 'error');
+    }
+  };
 
   // Seed local quantities from server selections whenever the week changes.
   useEffect(() => {
@@ -227,38 +332,61 @@ export function PersonWeekScreen() {
         MEAL_TYPES.map(meal => {
           const rows = selectedForMeal(activeDay, meal);
           const meta = mealMeta[meal];
+          const optedOut = isMealOptedOut(activeDay, meal);
+          const toggleEnabled = canToggleMeal(activeDay);
           return (
-            <Card key={meal} padded={false}>
+            <Card key={meal} padded={false} style={optedOut ? styles.cardOptedOut : undefined}>
               <View style={styles.mealHeader}>
                 <Text style={styles.mealIcon}>{meta.icon}</Text>
-                <Text style={styles.mealTitle}>{meta.label}</Text>
+                <Text style={[styles.mealTitle, optedOut && styles.mealTitleOptedOut]}>{meta.label}</Text>
+                <View style={styles.flex1} />
+                <View style={styles.toggleWrap}>
+                  {!toggleEnabled && (
+                    <Text style={styles.toggleHint}>
+                      {activeDay <= todayISO() ? '' : ''}
+                    </Text>
+                  )}
+                  <MealToggle
+                    value={!optedOut}
+                    onToggle={() => handleToggleMeal(activeDay, meal)}
+                    disabled={!toggleEnabled}
+                  />
+                </View>
               </View>
 
-              {rows.length === 0 ? (
-                <Text style={styles.emptyRow}>No items yet</Text>
+              {optedOut ? (
+                <Text style={styles.optedOutRow}>
+                  {toggleEnabled ? "You've skipped this meal" : 'Meal locked for today'}
+                </Text>
               ) : (
-                rows.map(r => (
-                  <View key={r.itemId} style={styles.itemRow}>
-                    <View style={styles.flex1}>
-                      <Text style={styles.itemName}>{r.item!.name}</Text>
-                      <Text style={styles.itemUnit}>per {r.item!.unit}</Text>
-                    </View>
-                    <Stepper
-                      value={r.qty}
-                      onChange={v => setQty(activeDay, meal, r.itemId, v)}
-                    />
-                  </View>
-                ))
-              )}
+                <>
+                  {rows.length === 0 ? (
+                    <Text style={styles.emptyRow}>No items yet</Text>
+                  ) : (
+                    rows.map(r => (
+                      <View key={r.itemId} style={styles.itemRow}>
+                        <View style={styles.flex1}>
+                          <Text style={styles.itemName}>{r.item!.name}</Text>
+                          <Text style={styles.itemUnit}>per {r.item!.unit}</Text>
+                        </View>
+                        <Stepper
+                          value={r.qty}
+                          onChange={v => setQty(activeDay, meal, r.itemId, v)}
+                        />
+                      </View>
+                    ))
+                  )}
 
-              <Pressable
-                style={styles.addRow}
-                onPress={() => {
-                  setSearch('');
-                  setSheetMeal(meal);
-                }}>
-                <Text style={styles.addText}>＋ Add an item</Text>
-              </Pressable>
+                  <Pressable
+                    style={styles.addRow}
+                    onPress={() => {
+                      setSearch('');
+                      setSheetMeal(meal);
+                    }}>
+                    <Text style={styles.addText}>＋ Add an item</Text>
+                  </Pressable>
+                </>
+              )}
             </Card>
           );
         })
@@ -368,6 +496,9 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+  cardOptedOut: {
+    opacity: 0.5,
+  },
   mealHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -377,6 +508,23 @@ const styles = StyleSheet.create({
   },
   mealIcon: { fontSize: 18, marginRight: spacing.sm },
   mealTitle: { color: colors.text, fontSize: font.h3, fontWeight: '700' },
+  mealTitleOptedOut: { color: colors.textFaint, textDecorationLine: 'line-through' as const },
+  toggleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  toggleHint: {
+    color: colors.textFaint,
+    fontSize: font.tiny,
+  },
+  optedOutRow: {
+    color: colors.textFaint,
+    fontSize: font.small,
+    fontStyle: 'italic',
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
   emptyRow: {
     color: colors.textFaint,
     fontSize: font.small,

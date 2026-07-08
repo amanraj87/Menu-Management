@@ -4,6 +4,7 @@ import {
   USERS,
   MENU_ITEMS,
   MY_SELECTIONS_FOR_WEEK,
+  MY_MEAL_OPT_OUTS,
   AGGREGATED_ORDER,
   CONFIRMED_ORDERS,
   FEEDBACKS_FOR_ADMIN,
@@ -156,6 +157,23 @@ export function useMySelectionsForWeek(startDate: string) {
     (s: any) => ({ date: s.date, mealType: s.mealType, items: s.items }),
   );
   return { selections, ...q };
+}
+
+export interface MealOptOut {
+  date: string;
+  mealType: MealType;
+}
+
+export function useMyMealOptOuts(startDate: string) {
+  const q = useGqlQuery<{ myMealOptOuts: any[] }>(
+    MY_MEAL_OPT_OUTS,
+    { startDate },
+    { skip: !startDate },
+  );
+  const optOuts: MealOptOut[] = (q.data?.myMealOptOuts ?? []).map(
+    (o: any) => ({ date: o.date, mealType: o.mealType as MealType }),
+  );
+  return { optOuts, ...q };
 }
 
 export function useAggregatedOrder(date: string, mealType: MealType) {

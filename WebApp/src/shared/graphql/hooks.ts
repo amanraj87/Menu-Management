@@ -21,6 +21,8 @@ import {
   FEEDBACKS_FOR_ADMIN,
   CONFIRM_FEEDBACK,
   CONFIRMED_FEEDBACKS,
+  MY_MEAL_OPT_OUTS,
+  TOGGLE_MEAL_OPT_OUT,
 } from './operations'
 import { toUser, toMenuItem, toSelection, toAggregatedOrder, toConfirmedOrder, toFeedback } from './mappers'
 import type { MealType, UserRole } from '@/shared/types'
@@ -299,4 +301,21 @@ export function useConfirmedFeedbacks() {
   const { data, loading, error } = useQuery<ConfirmedFeedbacksData>(CONFIRMED_FEEDBACKS)
   const feedbacks = (data?.confirmedFeedbacks ?? []).map(toFeedback)
   return { feedbacks, isLoading: loading, error }
+}
+
+interface MealOptOutsData { myMealOptOuts: { id: string; userId: string; date: string; mealType: string }[] }
+export function useMyMealOptOuts(startDate: string) {
+  const { data, loading, error, refetch } = useQuery<MealOptOutsData>(MY_MEAL_OPT_OUTS, {
+    variables: { startDate },
+    skip: !startDate,
+  })
+  const optOuts = (data?.myMealOptOuts ?? []).map(o => ({ date: o.date, mealType: o.mealType as MealType }))
+  return { optOuts, isLoading: loading, error, refetch }
+}
+
+export function useToggleMealOptOut() {
+  const [mutate, { loading }] = useMutation(TOGGLE_MEAL_OPT_OUT, {
+    refetchQueries: [MY_MEAL_OPT_OUTS],
+  })
+  return { mutate, loading }
 }

@@ -66,6 +66,13 @@ export const typeDefs = `#graphql
     confirmedAt: String!
   }
 
+  type MealOptOut {
+    id: ID!
+    userId: ID!
+    date: String!
+    mealType: MealType!
+  }
+
   type Feedback {
     id: ID!
     userId: ID!
@@ -151,6 +158,8 @@ export const typeDefs = `#graphql
     mySelectionsForWeek(startDate: String!): [Selection!]!
     aggregatedOrder(date: String!, mealType: MealType!): AggregatedOrder!
     confirmedOrders(date: String!): [ConfirmedOrder!]!
+    """Meal opt-outs for 7 days starting at startDate, for current user."""
+    myMealOptOuts(startDate: String!): [MealOptOut!]!
     """Admin: all feedbacks (pending and confirmed)."""
     feedbacksForAdmin: [Feedback!]!
     """Vendor: only confirmed feedbacks."""
@@ -170,6 +179,8 @@ export const typeDefs = `#graphql
     confirmOrder(date: String!, mealType: MealType!): ConfirmedOrder!
     """Admin: confirm and send to vendor with optional edited items/quantities."""
     confirmOrderWithItems(date: String!, mealType: MealType!, items: [ConfirmedOrderItemInput!]!): ConfirmedOrder!
+    """Toggle a meal opt-out. optedOut=true inserts, false removes."""
+    toggleMealOptOut(date: String!, mealType: MealType!, optedOut: Boolean!): Boolean!
     createFeedback(input: CreateFeedbackInput!): Feedback!
     confirmFeedback(id: ID!): Feedback!
   }

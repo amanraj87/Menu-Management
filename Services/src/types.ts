@@ -69,6 +69,14 @@ export interface FeedbackDoc {
   confirmedAt?: Date
 }
 
+export interface MealOptOutDoc {
+  _id: ObjectId
+  userId: ObjectId
+  date: string
+  mealType: MealType
+  createdAt: Date
+}
+
 export interface ContextUser {
   userId: string
   role: 'person' | 'admin' | 'vendor'

@@ -278,3 +278,20 @@ export const CONFIRMED_FEEDBACKS = gql`
     }
   }
 `
+
+export const MY_MEAL_OPT_OUTS = gql`
+  query MyMealOptOuts($startDate: String!) {
+    myMealOptOuts(startDate: $startDate) {
+      id
+      userId
+      date
+      mealType
+    }
+  }
+`
+
+export const TOGGLE_MEAL_OPT_OUT = gql`
+  mutation ToggleMealOptOut($date: String!, $mealType: MealType!, $optedOut: Boolean!) {
+    toggleMealOptOut(date: $date, mealType: $mealType, optedOut: $optedOut)
+  }
+`

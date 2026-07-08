@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Card, Button, Loader } from '@/shared/ui'
 import type { MealType, MenuItem } from '@/shared/types'
 import { useMutation } from '@apollo/client/react'
-import { useMenuItems, useMySelectionsForWeek } from '@/shared/graphql/hooks'
+import { useMenuItems, useMySelectionsForWeek, useMyMealOptOuts, useToggleMealOptOut } from '@/shared/graphql/hooks'
 import { useApolloClient } from '@apollo/client/react'
 import { MY_SELECTIONS_FOR_WEEK, PUT_SELECTION } from '@/shared/graphql/operations'
 import { useToastStore } from '@/shared/stores/toastStore'
@@ -65,6 +65,10 @@ function qtyKey(date: string, mealType: MealType, menuItemId: string) {
   return `${date}-${mealType}-${menuItemId}`
 }
 
+function canToggleMeal(dateStr: string): boolean {
+  return dateStr > toDateString(new Date())
+}
+
 export function PersonWeekView() {
   const [weekOf, setWeekOf] = useState(() => getWeekStart(toDateString(new Date())))
   const startDate = getWeekStart(weekOf)
@@ -73,7 +77,43 @@ export function PersonWeekView() {
 
   const { items: allMenuItems, isLoading: menuLoading } = useMenuItems()
   const { selections, isLoading: weekLoading } = useMySelectionsForWeek(startDate)
+  const { optOuts, refetch: refetchOptOuts } = useMyMealOptOuts(startDate)
+  const { mutate: toggleOptOutMutate } = useToggleMealOptOut()
+  const [localOptOuts, setLocalOptOuts] = useState<Set<string>>(new Set())
   const [quantities, setQuantities] = useState<Record<string, number>>({})
+
+  const optOutsKey = JSON.stringify(optOuts)
+  useEffect(() => {
+    const next = new Set<string>()
+    optOuts.forEach(o => next.add(`${o.date}-${o.mealType}`))
+    setLocalOptOuts(next)
+  }, [optOutsKey])
+
+  const isMealOptedOut = (date: string, mealId: MealType) =>
+    localOptOuts.has(`${date}-${mealId}`)
+
+  const handleToggleMeal = async (date: string, mealId: MealType) => {
+    const k = `${date}-${mealId}`
+    const currentlyOptedOut = localOptOuts.has(k)
+    const newOptedOut = !currentlyOptedOut
+    setLocalOptOuts(prev => {
+      const next = new Set(prev)
+      if (newOptedOut) next.add(k)
+      else next.delete(k)
+      return next
+    })
+    try {
+      await toggleOptOutMutate({ variables: { date, mealType: mealId, optedOut: newOptedOut } })
+    } catch (e) {
+      setLocalOptOuts(prev => {
+        const next = new Set(prev)
+        if (currentlyOptedOut) next.add(k)
+        else next.delete(k)
+        return next
+      })
+      toast.add(e instanceof Error ? e.message : 'Failed to toggle meal', 'error')
+    }
+  }
 
   const selectionsKey = JSON.stringify(selections.map((s) => [s.date, s.mealType, s.items.map((i) => [i.menuItemId, i.quantity])]))
   useEffect(() => {
@@ -304,90 +344,139 @@ export function PersonWeekView() {
               const unselectedItems = allMealItems.filter(
                 (item: MenuItem) => (quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0) === 0
               )
+              const optedOut = isMealOptedOut(dateStr, meal.id)
+              const toggleEnabled = canToggleMeal(dateStr)
               return (
-                <Card key={meal.id} className="person-week-meal-card" style={{ flex: '1 1 200px', minWidth: 0 }}>
+                <Card key={meal.id} className="person-week-meal-card" style={{ flex: '1 1 200px', minWidth: 0, opacity: optedOut ? 0.5 : 1, transition: 'opacity 0.2s' }}>
                   <div className="person-week-meal-card-header">
                     <MealIcon mealId={meal.id} />
-                    <span>{meal.label}</span>
-                  </div>
-                  {selectedItems.length === 0 ? (
-                    <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', margin: 0 }}>
-                      No items selected.
-                    </p>
-                  ) : (
-                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                      {selectedItems.map((item: MenuItem) => (
-                        <li
-                          key={item._id}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '0.25rem 0',
-                            borderBottom: '1px solid var(--color-border)',
-                          }}
-                        >
-                          <span className="person-week-meal-item-name">{item.name}</span>
-                          <div className="person-week-qty-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                            <button
-                              type="button"
-                              className="btn btn-ghost"
-                              aria-label="Decrease"
-                              onClick={() =>
-                                handleQty(
-                                  dateStr,
-                                  meal.id,
-                                  item._id,
-                                  Math.max(0, (quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0) - 1)
-                                )
-                              }
-                            >
-                              −
-                            </button>
-                            <input
-                              type="number"
-                              min={0}
-                              step="0.1"
-                              inputMode="decimal"
-                              aria-label="Quantity"
-                              value={draftQty[qtyKey(dateStr, meal.id, item._id)] ?? quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0}
-                              onChange={(e) => setDraftQty((prev) => ({ ...prev, [qtyKey(dateStr, meal.id, item._id)]: e.target.value }))}
-                              onBlur={() => commitDraft(qtyKey(dateStr, meal.id, item._id))}
-                              className="input input-qty person-week-qty-input"
-                              style={{ width: 44, minWidth: 44, textAlign: 'center' }}
-                            />
-                            <button
-                              type="button"
-                              className="btn btn-ghost"
-                              aria-label="Increase"
-                              onClick={() =>
-                                handleQty(dateStr, meal.id, item._id, (quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0) + 1)
-                              }
-                            >
-                              +
-                            </button>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {unselectedItems.length > 0 && (
-                    <div style={{ marginTop: '0.35rem', display: 'flex', justifyContent: 'flex-end' }}>
+                    <span style={optedOut ? { textDecoration: 'line-through', color: 'var(--color-text-muted)' } : undefined}>{meal.label}</span>
+                    <label
+                      className="meal-toggle-wrap"
+                      style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: toggleEnabled ? 'pointer' : 'not-allowed' }}
+                    >
                       <button
                         type="button"
-                        className="person-week-add-item-btn"
-                        onClick={(e) => {
-                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                          setAddItemAnchor(rect)
-                          setOpenAddItemKey(`${dateStr}-${meal.id}`)
+                        role="switch"
+                        aria-checked={!optedOut}
+                        aria-label={`${meal.label} ${optedOut ? 'off' : 'on'}`}
+                        disabled={!toggleEnabled}
+                        onClick={() => handleToggleMeal(dateStr, meal.id)}
+                        className={`meal-toggle ${optedOut ? 'meal-toggle--off' : 'meal-toggle--on'}`}
+                        style={{
+                          position: 'relative',
+                          width: 36,
+                          height: 20,
+                          borderRadius: 10,
+                          border: 'none',
+                          padding: 0,
+                          background: optedOut ? 'var(--color-secondary, #3f3f46)' : 'var(--color-primary, #22c55e)',
+                          cursor: toggleEnabled ? 'pointer' : 'not-allowed',
+                          opacity: toggleEnabled ? 1 : 0.4,
+                          transition: 'background 0.2s',
                         }}
                       >
-                        <span>Add an item…</span>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                          <path d="M6 9l6 6 6-6" />
-                        </svg>
+                        <span
+                          style={{
+                            position: 'absolute',
+                            top: 2,
+                            left: optedOut ? 2 : 18,
+                            width: 16,
+                            height: 16,
+                            borderRadius: 8,
+                            background: '#fff',
+                            transition: 'left 0.2s',
+                          }}
+                        />
                       </button>
-                    </div>
+                    </label>
+                  </div>
+                  {optedOut ? (
+                    <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 0', fontStyle: 'italic' }}>
+                      {toggleEnabled ? "You've skipped this meal" : 'Meal locked for today'}
+                    </p>
+                  ) : (
+                    <>
+                      {selectedItems.length === 0 ? (
+                        <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', margin: 0 }}>
+                          No items selected.
+                        </p>
+                      ) : (
+                        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                          {selectedItems.map((item: MenuItem) => (
+                            <li
+                              key={item._id}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '0.25rem 0',
+                                borderBottom: '1px solid var(--color-border)',
+                              }}
+                            >
+                              <span className="person-week-meal-item-name">{item.name}</span>
+                              <div className="person-week-qty-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost"
+                                  aria-label="Decrease"
+                                  onClick={() =>
+                                    handleQty(
+                                      dateStr,
+                                      meal.id,
+                                      item._id,
+                                      Math.max(0, (quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0) - 1)
+                                    )
+                                  }
+                                >
+                                  −
+                                </button>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.1"
+                                  inputMode="decimal"
+                                  aria-label="Quantity"
+                                  value={draftQty[qtyKey(dateStr, meal.id, item._id)] ?? quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0}
+                                  onChange={(e) => setDraftQty((prev) => ({ ...prev, [qtyKey(dateStr, meal.id, item._id)]: e.target.value }))}
+                                  onBlur={() => commitDraft(qtyKey(dateStr, meal.id, item._id))}
+                                  className="input input-qty person-week-qty-input"
+                                  style={{ width: 44, minWidth: 44, textAlign: 'center' }}
+                                />
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost"
+                                  aria-label="Increase"
+                                  onClick={() =>
+                                    handleQty(dateStr, meal.id, item._id, (quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0) + 1)
+                                  }
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {unselectedItems.length > 0 && (
+                        <div style={{ marginTop: '0.35rem', display: 'flex', justifyContent: 'flex-end' }}>
+                          <button
+                            type="button"
+                            className="person-week-add-item-btn"
+                            onClick={(e) => {
+                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                              setAddItemAnchor(rect)
+                              setOpenAddItemKey(`${dateStr}-${meal.id}`)
+                            }}
+                          >
+                            <span>Add an item…</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                              <path d="M6 9l6 6 6-6" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </Card>
               )

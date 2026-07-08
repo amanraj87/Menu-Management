@@ -34,6 +34,10 @@ export async function connectDb(): Promise<Db> {
     { date: 1, mealType: 1 },
     { unique: true }
   ).catch(() => {})
+  await db.collection(COLLECTIONS.meal_opt_outs).createIndex(
+    { userId: 1, date: 1, mealType: 1 },
+    { unique: true }
+  ).catch(() => {})
 
   return db
 }

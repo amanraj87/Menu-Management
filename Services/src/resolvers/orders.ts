@@ -6,6 +6,7 @@ import type { MealType } from '../types.js'
 import type {
   MenuItemDoc,
   SelectionDoc,
+  MealOptOutDoc,
   ConfirmedOrderDoc,
   ConfirmedOrderItemDoc,
   PersonBreakdownDoc,
@@ -17,10 +18,18 @@ export async function aggregatedOrder(
   args: { date: string; mealType: MealType }
 ): Promise<Record<string, unknown>> {
   const db = getDb()
-  const selections = await db
+
+  const optOuts = await db
+    .collection(COLLECTIONS.meal_opt_outs)
+    .find({ date: args.date, mealType: args.mealType })
+    .toArray() as MealOptOutDoc[]
+  const optedOutUserIds = new Set(optOuts.map(o => o.userId.toString()))
+
+  const allSelections = await db
     .collection(COLLECTIONS.selections)
     .find({ date: args.date, mealType: args.mealType })
     .toArray() as SelectionDoc[]
+  const selections = allSelections.filter(s => !optedOutUserIds.has(s.userId.toString()))
 
   const menuItemIds = new Set<string>()
   for (const s of selections) {
