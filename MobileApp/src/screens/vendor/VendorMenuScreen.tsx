@@ -1,26 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Screen } from '../../ui/Screen';
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  Input,
-  Loader,
-  Segmented,
-} from '../../ui';
+import { Badge, Button, Card, EmptyState, Input, Loader } from '../../ui';
 import { Sheet } from '../../ui/Sheet';
 import { SignOutButton } from '../../ui/SignOutButton';
 import { useMenuItems } from '../../api/hooks';
 import { gqlRequest } from '../../api/client';
-import {
-  CREATE_MENU_ITEM,
-  DELETE_MENU_ITEM,
-  UPDATE_MENU_ITEM,
-} from '../../api/operations';
+import { CREATE_MENU_ITEM, DELETE_MENU_ITEM, UPDATE_MENU_ITEM } from '../../api/operations';
 import { useToast } from '../../context/ToastContext';
-import { colors, font, mealMeta, radius, spacing } from '../../theme';
+import { colors, font, radius, spacing } from '../../theme';
 import { MEAL_TYPES, type MealType, type MenuItem } from '../../types';
 
 const UNITS = ['portion', 'piece', 'kg', 'plate', 'bowl'];
@@ -37,20 +25,13 @@ export function VendorMenuScreen() {
   const toast = useToast();
   const { items, loading, refetch } = useMenuItems();
 
-  const [meal, setMeal] = useState<MealType>('breakfast');
-
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [menuFormOpen, setMenuFormOpen] = useState(false);
-  const [editing, setEditing] = useState<MenuItem | null>(null); // per-meal single edit
-  const [editingDish, setEditingDish] = useState<CatalogDish | null>(null); // full-menu dish edit
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingDish, setEditingDish] = useState<CatalogDish | null>(null);
   const [name, setName] = useState('');
-  const [formMeal, setFormMeal] = useState<MealType>('breakfast');
   const [unit, setUnit] = useState('portion');
   const [price, setPrice] = useState('');
   const [saving, setSaving] = useState(false);
-  const [menuSearch, setMenuSearch] = useState('');
-  const [addSearch, setAddSearch] = useState('');
+  const [search, setSearch] = useState('');
 
   const catalog: CatalogDish[] = useMemo(() => {
     const map = new Map<string, CatalogDish>();
@@ -70,33 +51,13 @@ export function VendorMenuScreen() {
         });
       }
     });
-    map.forEach(d =>
-      d.meals.sort(
-        (a, b) => MEAL_TYPES.indexOf(a) - MEAL_TYPES.indexOf(b),
-      ),
-    );
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [items]);
 
-  const filtered = useMemo(
-    () => items.filter(i => i.mealType === meal),
-    [items, meal],
-  );
-
-  const menuFilteredCatalog = useMemo(() => {
-    const q = menuSearch.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return q ? catalog.filter(d => d.name.toLowerCase().includes(q)) : catalog;
-  }, [catalog, menuSearch]);
-
-  const pickable = useMemo(
-    () => catalog.filter(d => !d.meals.includes(formMeal)),
-    [catalog, formMeal],
-  );
-
-  const pickListFiltered = useMemo(() => {
-    const q = addSearch.trim().toLowerCase();
-    return q ? pickable.filter(d => d.name.toLowerCase().includes(q)) : pickable;
-  }, [pickable, addSearch]);
+  }, [catalog, search]);
 
   const unitOptions = useMemo(() => {
     const set = new Set<string>(UNITS);
@@ -106,73 +67,30 @@ export function VendorMenuScreen() {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [items]);
 
-  const resetForm = (m: MealType) => {
-    setEditing(null);
+  const resetForm = () => {
     setEditingDish(null);
     setName('');
-    setFormMeal(m);
     setUnit('portion');
     setPrice('');
   };
 
-  const openAddForMeal = (m: MealType) => {
-    resetForm(m);
-    setAddSearch('');
-    setSheetOpen(true);
-  };
-
-  const addDishToMeal = async (dish: CatalogDish) => {
-    try {
-      await gqlRequest(CREATE_MENU_ITEM, {
-        input: {
-          name: dish.name,
-          mealType: formMeal,
-          unit: dish.unit,
-          pricePerUnit: dish.pricePerUnit,
-        },
-      });
-      toast.show(`Added ${dish.name} to ${mealMeta[formMeal].label}.`, 'success');
-      refetch();
-    } catch (e) {
-      toast.show((e as Error).message, 'error');
-    }
-  };
-
-  const openMenu = () => {
-    resetForm('breakfast');
-    setMenuFormOpen(false);
-    setMenuSearch('');
-    setMenuOpen(true);
-  };
-
-  const openAddInMenu = () => {
-    resetForm('breakfast');
-    setMenuFormOpen(true);
+  const openAdd = () => {
+    resetForm();
+    setFormOpen(true);
   };
 
   const openEditDish = (dish: CatalogDish) => {
-    setEditing(null);
     setEditingDish(dish);
     setName(dish.name);
     setUnit(dish.unit);
     setPrice(dish.pricePerUnit != null ? String(dish.pricePerUnit) : '');
-    setMenuFormOpen(true);
-  };
-
-  const openEdit = (item: MenuItem) => {
-    setEditingDish(null);
-    setEditing(item);
-    setName(item.name);
-    setFormMeal(item.mealType);
-    setUnit(item.unit);
-    setPrice(item.pricePerUnit != null ? String(item.pricePerUnit) : '');
-    setSheetOpen(true);
+    setFormOpen(true);
   };
 
   const validate = (): { name: string; unit: string; price?: number } | null => {
     const trimmed = name.trim();
     if (!trimmed) {
-      toast.show('Enter an item name.', 'warning');
+      toast.show('Enter a dish name.', 'warning');
       return null;
     }
     const parsedPrice = price.trim() ? Number(price) : undefined;
@@ -183,28 +101,7 @@ export function VendorMenuScreen() {
     return { name: trimmed, unit: unit.trim() || 'portion', price: parsedPrice };
   };
 
-  // Per-meal single-record edit (from a meal tab)
-  const saveInSheet = async () => {
-    const v = validate();
-    if (!v || !editing) return;
-    setSaving(true);
-    try {
-      await gqlRequest(UPDATE_MENU_ITEM, {
-        id: editing._id,
-        input: { name: v.name, mealType: formMeal, unit: v.unit, pricePerUnit: v.price },
-      });
-      toast.show('Item updated.', 'success');
-      setSheetOpen(false);
-      refetch();
-    } catch (e) {
-      toast.show((e as Error).message, 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Full-menu inline form: add a new dish, or edit a dish across all its meals.
-  const saveInMenu = async () => {
+  const save = async () => {
     const v = validate();
     if (!v) return;
     setSaving(true);
@@ -218,23 +115,22 @@ export function VendorMenuScreen() {
         }
         toast.show('Dish updated.', 'success');
       } else {
-        const dup = items.some(
-          i =>
-            i.mealType === formMeal &&
-            i.name.trim().toLowerCase() === v.name.toLowerCase(),
-        );
+        const dup = catalog.some(d => d.name.trim().toLowerCase() === v.name.toLowerCase());
         if (dup) {
-          toast.show(`"${v.name}" is already in ${mealMeta[formMeal].label}.`, 'warning');
+          toast.show(`"${v.name}" is already on the menu.`, 'warning');
           setSaving(false);
           return;
         }
-        await gqlRequest(CREATE_MENU_ITEM, {
-          input: { name: v.name, mealType: formMeal, unit: v.unit, pricePerUnit: v.price },
-        });
-        toast.show(`Added to ${mealMeta[formMeal].label}.`, 'success');
+        // A dish is available for every meal.
+        for (const mealType of MEAL_TYPES) {
+          await gqlRequest(CREATE_MENU_ITEM, {
+            input: { name: v.name, mealType, unit: v.unit, pricePerUnit: v.price },
+          });
+        }
+        toast.show('Dish added.', 'success');
       }
-      setMenuFormOpen(false);
-      resetForm('breakfast');
+      setFormOpen(false);
+      resetForm();
       refetch();
     } catch (e) {
       toast.show((e as Error).message, 'error');
@@ -244,8 +140,7 @@ export function VendorMenuScreen() {
   };
 
   const removeDish = (dish: CatalogDish) => {
-    const where = dish.meals.map(m => mealMeta[m].label).join(', ');
-    Alert.alert('Remove dish', `Remove "${dish.name}" from ${where}?`, [
+    Alert.alert('Remove dish', `Remove "${dish.name}" from the menu?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
@@ -265,80 +160,53 @@ export function VendorMenuScreen() {
     ]);
   };
 
-  const confirmDelete = (item: MenuItem) => {
-    Alert.alert(
-      'Remove item',
-      `Remove "${item.name}" from ${mealMeta[item.mealType].label}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await gqlRequest(DELETE_MENU_ITEM, { id: item._id });
-              toast.show('Item removed.', 'success');
-              refetch();
-            } catch (e) {
-              toast.show((e as Error).message, 'error');
-            }
-          },
-        },
-      ],
-    );
-  };
-
   return (
     <Screen
-      title="Manage menu"
-      subtitle="Reuse dishes across meals"
-      headerRight={
-        <View style={styles.headerBtns}>
-          <Pressable onPress={openMenu} style={styles.menuBtn} hitSlop={6}>
-            <Text style={styles.menuBtnText}>📖 Menu</Text>
-          </Pressable>
-          <SignOutButton />
-        </View>
-      }
+      title="Menu"
+      subtitle="Your full list of dishes"
+      headerRight={<SignOutButton />}
       refreshing={loading}
       onRefresh={refetch}>
-      <Segmented
-        value={meal}
-        onChange={setMeal}
-        options={MEAL_TYPES.map(m => ({
-          value: m,
-          label: mealMeta[m].label,
-          icon: mealMeta[m].icon,
-        }))}
-      />
-      <Button
-        title={`Add item to ${mealMeta[meal].label}`}
-        icon="＋"
-        fullWidth
-        onPress={() => openAddForMeal(meal)}
-      />
+      <Button title="Add new dish" icon="＋" fullWidth onPress={openAdd} />
+
+      {catalog.length > 0 ? (
+        <Input
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search dishes…"
+          autoCapitalize="none"
+        />
+      ) : null}
 
       {loading && items.length === 0 ? (
         <Loader label="Loading menu…" />
-      ) : filtered.length === 0 ? (
+      ) : catalog.length === 0 ? (
         <EmptyState
-          icon={mealMeta[meal].icon}
-          title={`No ${mealMeta[meal].label.toLowerCase()} items`}
-          message="Add one — pick a dish from your menu."
+          icon="📖"
+          title="Your menu is empty"
+          message="Tap “Add new dish” to create your first dish."
         />
+      ) : filtered.length === 0 ? (
+        <Text style={styles.emptyMenu}>No dishes match “{search.trim()}”.</Text>
       ) : (
         <Card padded={false}>
-          {filtered.map((item, idx) => (
-            <View key={item._id} style={[styles.row, idx > 0 && styles.rowBorder]}>
+          {filtered.map((dish, idx) => (
+            <View key={dish.name} style={[styles.row, idx > 0 && styles.rowBorder]}>
               <View style={styles.flex1}>
-                <Text style={styles.name}>{item.name}</Text>
-                <Text style={styles.meta}>
-                  per {item.unit}
-                  {item.pricePerUnit != null ? ` · ₹${item.pricePerUnit}` : ''}
-                </Text>
+                <Text style={styles.name}>{dish.name}</Text>
+                <View style={styles.metaLine}>
+                  <Badge label="All meals" tone="primary" />
+                  <Text style={styles.meta}>
+                    per {dish.unit}
+                    {dish.pricePerUnit != null ? ` · ₹${dish.pricePerUnit}` : ''}
+                  </Text>
+                </View>
               </View>
+              <Pressable onPress={() => openEditDish(dish)} hitSlop={6} style={styles.iconBtn}>
+                <Text style={styles.editText}>Edit</Text>
+              </Pressable>
               <Pressable
-                onPress={() => confirmDelete(item)}
+                onPress={() => removeDish(dish)}
                 hitSlop={6}
                 style={[styles.iconBtn, styles.deleteBtn]}>
                 <Text style={styles.deleteText}>✕</Text>
@@ -348,199 +216,13 @@ export function VendorMenuScreen() {
         </Card>
       )}
 
-      {/* Edit a single item, or pick an existing dish to add to this meal */}
+      {/* Add / edit dish */}
       <Sheet
-        visible={sheetOpen}
-        onClose={() => setSheetOpen(false)}
-        title={editing ? 'Edit item' : `Add to ${mealMeta[formMeal].label}`}
-        maxHeightPct={editing ? 88 : 80}>
-        {editing ? (
-          <>
-            {renderForm(true)}
-            <Button
-              title="Save changes"
-              onPress={saveInSheet}
-              loading={saving}
-              fullWidth
-              size="lg"
-            />
-          </>
-        ) : catalog.length === 0 ? (
-          <EmptyState
-            icon="📖"
-            title="Your menu is empty"
-            message="Open Menu → Add new dish to create dishes first, then add them to meals here."
-          />
-        ) : (
-          <>
-            <Text style={styles.hint}>
-              Pick a dish from your menu to serve in {mealMeta[formMeal].label}.
-            </Text>
-            <View style={styles.sheetGap} />
-            <Input
-              value={addSearch}
-              onChangeText={setAddSearch}
-              placeholder="Search dishes…"
-              autoCapitalize="none"
-            />
-            {pickListFiltered.length === 0 ? (
-              <Text style={styles.emptyMenu}>
-                {addSearch.trim()
-                  ? `No dishes match “${addSearch.trim()}”.`
-                  : `Every dish is already in ${mealMeta[formMeal].label}.`}
-              </Text>
-            ) : (
-              <Card padded={false}>
-                {pickListFiltered.map((dish, idx) => (
-                  <Pressable
-                    key={dish.name}
-                    onPress={() => addDishToMeal(dish)}
-                    style={[styles.row, idx > 0 && styles.rowBorder]}>
-                    <View style={styles.flex1}>
-                      <Text style={styles.name}>{dish.name}</Text>
-                      <Text style={styles.meta}>
-                        per {dish.unit}
-                        {dish.pricePerUnit != null ? ` · ₹${dish.pricePerUnit}` : ''}
-                      </Text>
-                    </View>
-                    <Text style={styles.addPlus}>＋ Add</Text>
-                  </Pressable>
-                ))}
-              </Card>
-            )}
-            <View style={styles.sheetGap} />
-            <Button
-              title="Done"
-              variant="outline"
-              onPress={() => setSheetOpen(false)}
-              fullWidth
-            />
-          </>
-        )}
-      </Sheet>
-
-      {/* Full menu popup: one row per dish (meal badges), add/edit inline */}
-      <Sheet
-        visible={menuOpen}
-        onClose={() => {
-          setMenuOpen(false);
-          setMenuFormOpen(false);
-        }}
-        title="Full menu"
-        maxHeightPct={92}>
-        <View style={styles.menuHeader}>
-          <Text style={styles.menuCount}>
-            {catalog.length} {catalog.length === 1 ? 'dish' : 'dishes'}
-          </Text>
-          {!menuFormOpen ? (
-            <Button title="＋ Add new dish" size="sm" onPress={openAddInMenu} />
-          ) : null}
-        </View>
-
-        {catalog.length > 0 ? (
-          <Input
-            value={menuSearch}
-            onChangeText={setMenuSearch}
-            placeholder="Search dishes…"
-            autoCapitalize="none"
-          />
-        ) : null}
-
-        {menuFormOpen ? (
-          <View style={styles.inlineForm}>
-            <Text style={styles.inlineFormTitle}>
-              {editingDish ? `Edit “${editingDish.name}”` : 'Add a dish'}
-            </Text>
-            {renderForm(false)}
-            {editingDish ? (
-              <Text style={styles.appliesTo}>
-                Applies to: {editingDish.meals.map(m => mealMeta[m].label).join(', ')}
-              </Text>
-            ) : null}
-            <View style={styles.formActions}>
-              <Button
-                title="Cancel"
-                variant="ghost"
-                onPress={() => {
-                  setMenuFormOpen(false);
-                  resetForm('breakfast');
-                }}
-                style={styles.flex1}
-              />
-              <Button
-                title={editingDish ? 'Save' : 'Add dish'}
-                onPress={saveInMenu}
-                loading={saving}
-                style={styles.flex1}
-              />
-            </View>
-          </View>
-        ) : null}
-
-        {catalog.length === 0 ? (
-          <Text style={styles.emptyMenu}>
-            No dishes yet. Tap “Add new dish” to create one.
-          </Text>
-        ) : menuFilteredCatalog.length === 0 ? (
-          <Text style={styles.emptyMenu}>No dishes match “{menuSearch.trim()}”.</Text>
-        ) : (
-          <Card padded={false}>
-            {menuFilteredCatalog.map((dish, idx) => (
-              <View key={dish.name} style={[styles.row, idx > 0 && styles.rowBorder]}>
-                <View style={styles.flex1}>
-                  <Text style={styles.name}>{dish.name}</Text>
-                  <View style={styles.metaLine}>
-                    {dish.meals.map(m => (
-                      <Badge key={m} label={mealMeta[m].label} tone="primary" />
-                    ))}
-                    <Text style={styles.meta}>
-                      per {dish.unit}
-                      {dish.pricePerUnit != null ? ` · ₹${dish.pricePerUnit}` : ''}
-                    </Text>
-                  </View>
-                </View>
-                <Pressable
-                  onPress={() => openEditDish(dish)}
-                  hitSlop={6}
-                  style={styles.iconBtn}>
-                  <Text style={styles.editText}>Edit</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => removeDish(dish)}
-                  hitSlop={6}
-                  style={[styles.iconBtn, styles.deleteBtn]}>
-                  <Text style={styles.deleteText}>✕</Text>
-                </Pressable>
-              </View>
-            ))}
-          </Card>
-        )}
-      </Sheet>
-    </Screen>
-  );
-
-  /** Shared name / (optional meal) / unit / price fields.
-   *  Unit is a free text field with quick-pick chips, so any custom unit works. */
-  function renderForm(showMeal: boolean) {
-    return (
-      <>
-        <Input
-          label="Name"
-          value={name}
-          onChangeText={setName}
-          placeholder="e.g. Grilled Chicken"
-        />
-        {showMeal ? (
-          <>
-            <Text style={styles.fieldLabel}>Meal</Text>
-            <Segmented
-              value={formMeal}
-              onChange={setFormMeal}
-              options={MEAL_TYPES.map(m => ({ value: m, label: mealMeta[m].label }))}
-            />
-            <View style={styles.sheetGap} />
-          </>
-        ) : null}
+        visible={formOpen}
+        onClose={() => { setFormOpen(false); resetForm(); }}
+        title={editingDish ? `Edit “${editingDish.name}”` : 'Add a dish'}
+        maxHeightPct={80}>
+        <Input label="Name" value={name} onChangeText={setName} placeholder="e.g. Grilled Chicken" />
         <Input
           label="Unit"
           value={unit}
@@ -576,23 +258,20 @@ export function VendorMenuScreen() {
           keyboardType="decimal-pad"
         />
         <View style={styles.sheetGap} />
-      </>
-    );
-  }
+        <Button
+          title={editingDish ? 'Save changes' : 'Add dish'}
+          onPress={save}
+          loading={saving}
+          fullWidth
+          size="lg"
+        />
+      </Sheet>
+    </Screen>
+  );
 }
 
 const styles = StyleSheet.create({
   flex1: { flex: 1 },
-  headerBtns: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  menuBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
-  },
-  menuBtnText: { color: colors.primary, fontSize: font.small, fontWeight: '700' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -602,7 +281,7 @@ const styles = StyleSheet.create({
   },
   rowBorder: { borderTopWidth: 1, borderTopColor: colors.border },
   name: { color: colors.text, fontSize: font.body, fontWeight: '600' },
-  meta: { color: colors.textFaint, fontSize: font.small, marginTop: 2 },
+  meta: { color: colors.textFaint, fontSize: font.small },
   metaLine: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -617,17 +296,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgElevated,
   },
   editText: { color: colors.primary, fontSize: font.small, fontWeight: '700' },
-  addPlus: { color: colors.primary, fontSize: font.small, fontWeight: '700' },
   deleteBtn: { backgroundColor: colors.dangerSoft },
   deleteText: { color: colors.danger, fontSize: font.small, fontWeight: '700' },
-  fieldLabel: {
-    color: colors.textMuted,
-    fontSize: font.small,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
   sheetGap: { height: spacing.lg },
-  hint: { color: colors.textFaint, fontSize: font.tiny, marginTop: spacing.sm },
   unitRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
   unitChip: {
     paddingHorizontal: spacing.md,
@@ -640,30 +311,6 @@ const styles = StyleSheet.create({
   unitChipActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   unitChipText: { color: colors.textMuted, fontSize: font.small, fontWeight: '600' },
   unitChipTextActive: { color: colors.primary },
-  menuHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  menuCount: { color: colors.textMuted, fontSize: font.small, fontWeight: '600' },
-  inlineForm: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.bgElevated,
-    padding: spacing.lg,
-    marginTop: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  inlineFormTitle: {
-    color: colors.text,
-    fontSize: font.h3,
-    fontWeight: '700',
-    marginBottom: spacing.md,
-  },
-  appliesTo: { color: colors.textMuted, fontSize: font.tiny, marginBottom: spacing.md },
-  formActions: { flexDirection: 'row', gap: spacing.md },
   emptyMenu: {
     color: colors.textMuted,
     fontSize: font.body,

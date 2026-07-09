@@ -31,6 +31,10 @@ import {
   GET_SETTINGS,
   UPDATE_SETTINGS,
   WEEKLY_EXPENSE,
+  MEAL_CANCELLATIONS_FOR_RANGE,
+  TOGGLE_MEAL_CANCELLATION,
+  VENDOR_DAY_NOTES_FOR_RANGE,
+  UPDATE_VENDOR_DAY_NOTE,
 } from './operations'
 import { toUser, toMenuItem, toSelection, toAggregatedOrder, toConfirmedOrder, toFeedback } from './mappers'
 import type { MealType, UserRole } from '@/shared/types'
@@ -381,10 +385,10 @@ export function useConfirmedOrdersForRange(startDate: string, endDate: string) {
   return { orders, isLoading: loading, error }
 }
 
-interface SettingsData { getSettings: { monthlyMealCap: number | null; updatedAt: string | null } }
+interface SettingsData { getSettings: { monthlyMealCap: number | null; deliveryCharge: number | null; updatedAt: string | null } }
 export function useSettings() {
   const { data, loading, error, refetch } = useQuery<SettingsData>(GET_SETTINGS)
-  return { settings: data?.getSettings ?? { monthlyMealCap: null, updatedAt: null }, isLoading: loading, error, refetch }
+  return { settings: data?.getSettings ?? { monthlyMealCap: null, deliveryCharge: null, updatedAt: null }, isLoading: loading, error, refetch }
 }
 
 interface WeeklyExpenseData { weeklyExpense: number }
@@ -394,6 +398,43 @@ export function useWeeklyExpense(startDate: string) {
     skip: !startDate,
   })
   return { weeklyExpense: data?.weeklyExpense ?? 0, isLoading: loading, error, refetch }
+}
+
+interface MealCancellationsData { mealCancellationsForRange: { id: string; date: string; mealType: MealType }[] }
+export function useMealCancellationsForRange(startDate: string, endDate: string) {
+  const { data, loading, error, refetch } = useQuery<MealCancellationsData>(MEAL_CANCELLATIONS_FOR_RANGE, {
+    variables: { startDate, endDate },
+    skip: !startDate || !endDate,
+  })
+  return { cancellations: data?.mealCancellationsForRange ?? [], isLoading: loading, error, refetch }
+}
+
+export function useToggleMealCancellation() {
+  const [mutate, { loading }] = useMutation(TOGGLE_MEAL_CANCELLATION)
+  return {
+    toggle: (date: string, mealType: MealType, cancelled: boolean) => mutate({ variables: { date, mealType, cancelled } }),
+    isPending: loading,
+  }
+}
+
+interface VendorDayNoteData {
+  vendorDayNotesForRange: Array<{ id: string; date: string; finalAmount: number | null; comment: string; updatedAt: string | null }>
+}
+
+export function useVendorDayNotesForRange(startDate: string, endDate: string) {
+  const { data, loading, error, refetch } = useQuery<VendorDayNoteData>(VENDOR_DAY_NOTES_FOR_RANGE, {
+    variables: { startDate, endDate },
+    skip: !startDate || !endDate,
+  })
+  return { notes: data?.vendorDayNotesForRange ?? [], isLoading: loading, error, refetch }
+}
+
+export function useUpdateVendorDayNote() {
+  const [mutate, { loading }] = useMutation(UPDATE_VENDOR_DAY_NOTE)
+  return {
+    update: (date: string, finalAmount: number | null, comment: string) => mutate({ variables: { date, finalAmount, comment } }),
+    isPending: loading,
+  }
 }
 
 export function useUpdateSettings(onSuccess?: () => void, onError?: (e: Error) => void) {
@@ -406,7 +447,7 @@ export function useUpdateSettings(onSuccess?: () => void, onError?: (e: Error) =
     onError: (e: Error) => onError?.(e),
   })
   return {
-    updateSettings: (monthlyMealCap: number | null) => mutate({ variables: { monthlyMealCap } }),
+    updateSettings: (monthlyMealCap: number | null, deliveryCharge: number | null) => mutate({ variables: { monthlyMealCap, deliveryCharge } }),
     isPending: result.loading,
     error: result.error,
   }

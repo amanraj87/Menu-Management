@@ -4,9 +4,8 @@ import { Layout, Sidebar, Header } from '@/shared/ui'
 import { useUIStore } from '@/shared/stores/uiStore'
 
 const adminNav = [
-  { to: '/admin', label: 'Dashboard' },
+  { to: '/admin/week', label: 'Week' },
   { to: '/admin/users', label: 'Users & vendors' },
-  { to: '/admin/orders', label: 'Combined orders' },
   { to: '/admin/feedback', label: 'Feedback & suggestions' },
   { to: '/admin/menu', label: 'View menu' },
 ]

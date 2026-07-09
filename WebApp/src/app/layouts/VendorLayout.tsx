@@ -5,7 +5,6 @@ import { useUIStore } from '@/shared/stores/uiStore'
 import { LiveUpdateBanner } from '@/features/vendor/LiveUpdateBanner'
 
 const vendorNav = [
-  { to: '/vendor', label: "Today's orders", end: true },
   { to: '/vendor/week', label: 'Week', end: false },
   { to: '/vendor/feedback', label: 'Feedback', end: false },
   { to: '/vendor/menu', label: 'Update menu', end: false },

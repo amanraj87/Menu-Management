@@ -153,14 +153,40 @@ export async function confirmOrderWithItems(
   const user = context.user
   if (!user || user.role !== 'admin') throw new Error('Unauthorized: admin role required to confirm order')
 
+  for (const i of args.items) {
+    if (!Number.isFinite(i.quantity) || i.quantity <= 0) {
+      throw new Error(`Invalid quantity ${i.quantity} for "${i.name}": must be a positive number`)
+    }
+  }
+
   const db = getDb()
-  const orderItems: ConfirmedOrderItemDoc[] = args.items.map((i) => ({
-    menuItemId: new ObjectId(i.menuItemId),
-    name: i.name,
-    unit: i.unit,
-    quantity: i.quantity,
-    personBreakdown: [],
-  }))
+
+  // Preserve per-person breakdowns: prefer the live aggregated selections,
+  // fall back to the breakdown already stored on the existing confirmed order.
+  const agg = await aggregatedOrder(_, { date: args.date, mealType: args.mealType }) as {
+    items: { menuItemId: string; quantity: number; personBreakdown: { userId: string; userName: string; quantity: number }[] }[]
+  }
+  const aggBreakdowns = new Map(agg.items.map((i) => [i.menuItemId, i.personBreakdown]))
+  const existingDoc = await db.collection(COLLECTIONS.confirmed_orders).findOne(
+    { date: args.date, mealType: args.mealType }
+  ) as ConfirmedOrderDoc | null
+  const existingBreakdowns = new Map(
+    (existingDoc?.items ?? []).map((i) => [i.menuItemId.toString(), i.personBreakdown])
+  )
+
+  const orderItems: ConfirmedOrderItemDoc[] = args.items.map((i) => {
+    const aggBd = aggBreakdowns.get(i.menuItemId)
+    const personBreakdown: PersonBreakdownDoc[] = aggBd
+      ? aggBd.map((p) => ({ userId: new ObjectId(p.userId), userName: p.userName, quantity: p.quantity }))
+      : (existingBreakdowns.get(i.menuItemId) ?? [])
+    return {
+      menuItemId: new ObjectId(i.menuItemId),
+      name: i.name,
+      unit: i.unit,
+      quantity: i.quantity,
+      personBreakdown,
+    }
+  })
 
   const doc: Omit<ConfirmedOrderDoc, '_id'> = {
     date: args.date,

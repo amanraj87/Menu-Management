@@ -84,6 +84,22 @@ export const typeDefs = `#graphql
 
   type Settings {
     monthlyMealCap: Float
+    deliveryCharge: Float
+    updatedAt: String
+  }
+
+  """A meal the vendor has cancelled for a given date (e.g. kitchen closed)."""
+  type MealCancellation {
+    id: ID!
+    date: String!
+    mealType: MealType!
+  }
+
+  type VendorDayNote {
+    id: ID!
+    date: String!
+    finalAmount: Float
+    comment: String!
     updatedAt: String
   }
 
@@ -178,6 +194,10 @@ export const typeDefs = `#graphql
     getSettings: Settings!
     """Admin: total price of ALL users' selections for 7 days starting at startDate."""
     weeklyExpense(startDate: String!): Float!
+    """Vendor-cancelled meals within a date range (inclusive)."""
+    mealCancellationsForRange(startDate: String!, endDate: String!): [MealCancellation!]!
+    """Vendor day notes (final amount override + comment) for a date range."""
+    vendorDayNotesForRange(startDate: String!, endDate: String!): [VendorDayNote!]!
     """Meal opt-outs for 7 days starting at startDate, for current user."""
     myMealOptOuts(startDate: String!): [MealOptOut!]!
     """Current user's meal-done marks for 7 days starting at startDate."""
@@ -210,7 +230,11 @@ export const typeDefs = `#graphql
     createFeedback(input: CreateFeedbackInput!): Feedback!
     confirmFeedback(id: ID!): Feedback!
     rejectFeedback(id: ID!): Feedback!
-    """Admin: set the monthly meal price cap (null to disable)."""
-    updateSettings(monthlyMealCap: Float): Settings!
+    """Admin: update app settings. Pass the fields to change (monthly cap, delivery charge; null clears)."""
+    updateSettings(monthlyMealCap: Float, deliveryCharge: Float): Settings!
+    """Vendor/admin: cancel or restore a meal for a specific date."""
+    toggleMealCancellation(date: String!, mealType: MealType!, cancelled: Boolean!): Boolean!
+    """Vendor: set or update the final amount and comment for a day."""
+    updateVendorDayNote(date: String!, finalAmount: Float, comment: String!): VendorDayNote!
   }
 `

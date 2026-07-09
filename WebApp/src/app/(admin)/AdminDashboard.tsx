@@ -6,7 +6,10 @@ import { useToastStore } from '@/shared/stores/toastStore'
 import type { ConfirmedOrder } from '@/shared/types'
 
 function toDateString(d: Date) {
-  return d.toISOString().slice(0, 10)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 function getWeekStart(dateStr: string): string {
@@ -111,13 +114,15 @@ export function AdminDashboard() {
 
   const [capInput, setCapInput] = useState('')
   const [capEditing, setCapEditing] = useState(false)
+  const [deliveryInput, setDeliveryInput] = useState('')
+  const [deliveryEditing, setDeliveryEditing] = useState(false)
 
   const { users, isLoading: usersLoading } = useUsers()
   const { feedbacks, isLoading: feedbackLoading } = useFeedbacksForAdmin()
   const { items: menuItems, isLoading: menuLoading } = useMenuItems()
   const { settings, isLoading: settingsLoading } = useSettings()
   const { updateSettings, isPending: settingsPending } = useUpdateSettings(
-    () => { toast.add('Monthly cap updated.', 'success'); setCapEditing(false) },
+    () => { toast.add('Settings updated.', 'success'); setCapEditing(false); setDeliveryEditing(false) },
     (e) => toast.add(e.message, 'error')
   )
 
@@ -296,14 +301,60 @@ export function AdminDashboard() {
                 />
                 <Button size="sm" onClick={() => {
                   const val = capInput.trim() === '' ? null : parseFloat(capInput)
-                  updateSettings(val)
+                  if (val != null && (!Number.isFinite(val) || val < 0)) { toast.add('Cap must be a non-negative number', 'error'); return }
+                  updateSettings(val, settings.deliveryCharge)
                 }} disabled={settingsPending}>
                   {settingsPending ? 'Saving…' : 'Save'}
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => setCapEditing(false)}>Cancel</Button>
                 {settings.monthlyMealCap != null && (
-                  <Button size="sm" variant="danger" onClick={() => updateSettings(null)} disabled={settingsPending}>
+                  <Button size="sm" variant="danger" onClick={() => updateSettings(null, settings.deliveryCharge)} disabled={settingsPending}>
                     Remove cap
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Delivery Charge */}
+        <section style={{ marginBottom: '1.5rem' }}>
+          <h3>Delivery Charge</h3>
+          <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem', background: 'var(--color-surface)' }}>
+            {!deliveryEditing ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>
+                    {settings.deliveryCharge != null ? `₹${settings.deliveryCharge}` : 'No charge set'}
+                  </p>
+                  <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+                    Added to each day&apos;s total on the vendor week sheet
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => { setDeliveryInput(settings.deliveryCharge != null ? String(settings.deliveryCharge) : ''); setDeliveryEditing(true) }}>
+                  Edit
+                </Button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input
+                  type="number"
+                  placeholder="e.g. 120"
+                  value={deliveryInput}
+                  onChange={(e) => setDeliveryInput(e.target.value)}
+                  style={{ padding: '0.4rem 0.5rem', borderRadius: '0.375rem', border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', width: 120 }}
+                />
+                <Button size="sm" onClick={() => {
+                  const val = deliveryInput.trim() === '' ? null : parseFloat(deliveryInput)
+                  if (val != null && (!Number.isFinite(val) || val < 0)) { toast.add('Delivery charge must be a non-negative number', 'error'); return }
+                  updateSettings(settings.monthlyMealCap, val)
+                }} disabled={settingsPending}>
+                  {settingsPending ? 'Saving…' : 'Save'}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setDeliveryEditing(false)}>Cancel</Button>
+                {settings.deliveryCharge != null && (
+                  <Button size="sm" variant="danger" onClick={() => updateSettings(settings.monthlyMealCap, null)} disabled={settingsPending}>
+                    Remove
                   </Button>
                 )}
               </div>

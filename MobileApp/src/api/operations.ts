@@ -189,19 +189,43 @@ export const CONFIRMED_ORDERS_FOR_RANGE = `
 
 export const GET_SETTINGS = `
   query GetSettings {
-    getSettings { monthlyMealCap updatedAt }
+    getSettings { monthlyMealCap deliveryCharge updatedAt }
   }
 `;
 
 export const UPDATE_SETTINGS = `
-  mutation UpdateSettings($monthlyMealCap: Float) {
-    updateSettings(monthlyMealCap: $monthlyMealCap) { monthlyMealCap updatedAt }
+  mutation UpdateSettings($monthlyMealCap: Float, $deliveryCharge: Float) {
+    updateSettings(monthlyMealCap: $monthlyMealCap, deliveryCharge: $deliveryCharge) { monthlyMealCap deliveryCharge updatedAt }
   }
 `;
 
 export const WEEKLY_EXPENSE = `
   query WeeklyExpense($startDate: String!) {
     weeklyExpense(startDate: $startDate)
+  }
+`;
+
+export const MEAL_CANCELLATIONS_FOR_RANGE = `
+  query MealCancellationsForRange($startDate: String!, $endDate: String!) {
+    mealCancellationsForRange(startDate: $startDate, endDate: $endDate) { id date mealType }
+  }
+`;
+
+export const TOGGLE_MEAL_CANCELLATION = `
+  mutation ToggleMealCancellation($date: String!, $mealType: MealType!, $cancelled: Boolean!) {
+    toggleMealCancellation(date: $date, mealType: $mealType, cancelled: $cancelled)
+  }
+`;
+
+export const VENDOR_DAY_NOTES_FOR_RANGE = `
+  query VendorDayNotesForRange($startDate: String!, $endDate: String!) {
+    vendorDayNotesForRange(startDate: $startDate, endDate: $endDate) { id date finalAmount comment updatedAt }
+  }
+`;
+
+export const UPDATE_VENDOR_DAY_NOTE = `
+  mutation UpdateVendorDayNote($date: String!, $finalAmount: Float, $comment: String!) {
+    updateVendorDayNote(date: $date, finalAmount: $finalAmount, comment: $comment) { id date finalAmount comment updatedAt }
   }
 `;
 

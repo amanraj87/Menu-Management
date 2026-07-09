@@ -195,6 +195,9 @@ export function AdminDashboardScreen() {
   const [capEditing, setCapEditing] = useState(false);
   const [capInput, setCapInput] = useState('');
   const [capSaving, setCapSaving] = useState(false);
+  const [deliveryEditing, setDeliveryEditing] = useState(false);
+  const [deliveryInput, setDeliveryInput] = useState('');
+  const [deliverySaving, setDeliverySaving] = useState(false);
 
   function getRange(period: Period, cs: string, ce: string): [string, string] {
     switch (period) {
@@ -259,11 +262,12 @@ export function AdminDashboardScreen() {
       const map = (arr: any[]) => arr.map((o: any) => ({ ...o, _id: o.id }));
       setExpenseOrders(map(expRes.confirmedOrdersForRange ?? []));
       setDishOrders(map(dshRes.confirmedOrdersForRange ?? []));
-    } catch {
+    } catch (e) {
+      toast.show(`Failed to load dashboard: ${(e as Error).message}`, 'error');
     } finally {
       setLoading(false);
     }
-  }, [expStart, expEnd, dshStart, dshEnd]);
+  }, [expStart, expEnd, dshStart, dshEnd, toast]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -279,9 +283,13 @@ export function AdminDashboardScreen() {
   const pending = feedbacks.filter(f => f.status === 'pending').length;
 
   const handleSaveCap = async (value: number | null) => {
+    if (value != null && (!Number.isFinite(value) || value < 0)) {
+      toast.show('Cap must be a non-negative number', 'error');
+      return;
+    }
     setCapSaving(true);
     try {
-      await gqlRequest(UPDATE_SETTINGS, { monthlyMealCap: value });
+      await gqlRequest(UPDATE_SETTINGS, { monthlyMealCap: value, deliveryCharge: settings.deliveryCharge });
       toast.show('Monthly cap updated.', 'success');
       setCapEditing(false);
       refetchSettings();
@@ -289,6 +297,24 @@ export function AdminDashboardScreen() {
       toast.show((e as Error).message, 'error');
     } finally {
       setCapSaving(false);
+    }
+  };
+
+  const handleSaveDelivery = async (value: number | null) => {
+    if (value != null && (!Number.isFinite(value) || value < 0)) {
+      toast.show('Delivery charge must be a non-negative number', 'error');
+      return;
+    }
+    setDeliverySaving(true);
+    try {
+      await gqlRequest(UPDATE_SETTINGS, { monthlyMealCap: settings.monthlyMealCap, deliveryCharge: value });
+      toast.show('Delivery charge updated.', 'success');
+      setDeliveryEditing(false);
+      refetchSettings();
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setDeliverySaving(false);
     }
   };
 
@@ -375,6 +401,61 @@ export function AdminDashboardScreen() {
                     variant="danger"
                     onPress={() => handleSaveCap(null)}
                     loading={capSaving}
+                    style={{ marginTop: spacing.sm }}
+                    fullWidth
+                  />
+                )}
+              </View>
+            )}
+          </Card>
+
+          {/* Delivery Charge */}
+          <SectionLabel>Delivery Charge</SectionLabel>
+          <Card>
+            {!deliveryEditing ? (
+              <View style={styles.capRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.capValue}>
+                    {settings.deliveryCharge != null ? `₹${settings.deliveryCharge}` : 'No charge set'}
+                  </Text>
+                  <Text style={styles.capSub}>Added to each day&apos;s total on the vendor week sheet</Text>
+                </View>
+                <Button
+                  title="Edit"
+                  variant="outline"
+                  onPress={() => {
+                    setDeliveryInput(settings.deliveryCharge != null ? String(settings.deliveryCharge) : '');
+                    setDeliveryEditing(true);
+                  }}
+                />
+              </View>
+            ) : (
+              <View>
+                <View style={styles.capEditRow}>
+                  <TextInput
+                    style={styles.capInput}
+                    value={deliveryInput}
+                    onChangeText={setDeliveryInput}
+                    placeholder="e.g. 120"
+                    placeholderTextColor={colors.textFaint}
+                    keyboardType="numeric"
+                  />
+                  <Button
+                    title={deliverySaving ? 'Saving…' : 'Save'}
+                    onPress={() => {
+                      const val = deliveryInput.trim() === '' ? null : parseFloat(deliveryInput);
+                      handleSaveDelivery(val);
+                    }}
+                    loading={deliverySaving}
+                  />
+                  <Button title="Cancel" variant="outline" onPress={() => setDeliveryEditing(false)} />
+                </View>
+                {settings.deliveryCharge != null && (
+                  <Button
+                    title="Remove"
+                    variant="danger"
+                    onPress={() => handleSaveDelivery(null)}
+                    loading={deliverySaving}
                     style={{ marginTop: spacing.sm }}
                     fullWidth
                   />

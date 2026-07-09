@@ -85,9 +85,27 @@ export interface MealDoneDoc {
   markedAt: Date
 }
 
+export interface MealCancellationDoc {
+  _id: ObjectId
+  date: string
+  mealType: MealType
+  cancelledBy: ObjectId
+  cancelledAt: Date
+}
+
+export interface VendorDayNoteDoc {
+  _id: ObjectId
+  date: string
+  finalAmount: number | null
+  comment: string
+  updatedBy: ObjectId
+  updatedAt: Date
+}
+
 export interface SettingsDoc {
   _id: ObjectId
   monthlyMealCap: number | null
+  deliveryCharge: number | null
   updatedAt: Date
   updatedBy: ObjectId
 }

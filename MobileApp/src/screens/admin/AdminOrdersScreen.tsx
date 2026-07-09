@@ -13,9 +13,9 @@ import {
 } from '../../ui';
 import { Sheet } from '../../ui/Sheet';
 import { SignOutButton } from '../../ui/SignOutButton';
-import { useAggregatedOrder, useMenuItems, useMealDoneStatus, useWeeklyExpense } from '../../api/hooks';
+import { useAggregatedOrder, useMenuItems, useMealDoneStatus, useWeeklyExpense, useMealCancellationsForRange } from '../../api/hooks';
 import { gqlRequest } from '../../api/client';
-import { AGGREGATED_ORDER, CONFIRM_ORDER_WITH_ITEMS } from '../../api/operations';
+import { AGGREGATED_ORDER, CONFIRM_ORDER_WITH_ITEMS, CONFIRMED_ORDERS, CONFIRMED_ORDERS_FOR_RANGE, TOGGLE_MEAL_CANCELLATION } from '../../api/operations';
 import { useToast } from '../../context/ToastContext';
 import { colors, font, mealMeta, radius, spacing } from '../../theme';
 import { addDays, formatShort, isToday, todayISO, weekDays, weekStart } from '../../utils/date';
@@ -47,6 +47,22 @@ export function AdminOrdersScreen() {
   const menu = useMenuItems(meal);
   const { doneUsers, refetch: refetchDone } = useMealDoneStatus(date, meal);
   const { weeklyExpense, loading: weeklyExpenseLoading } = useWeeklyExpense(wkStart);
+  const { cancellations, refetch: refetchCancellations } = useMealCancellationsForRange(date, date);
+  const isCancelled = cancellations.some(c => c.date === date && c.mealType === meal);
+  const [cancelToggling, setCancelToggling] = useState(false);
+  const handleToggleCancel = async () => {
+    setCancelToggling(true);
+    try {
+      await gqlRequest(TOGGLE_MEAL_CANCELLATION, { date, mealType: meal, cancelled: !isCancelled });
+      await refetchCancellations();
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setCancelToggling(false);
+    }
+  };
+
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setItems(
@@ -58,6 +74,7 @@ export function AdminOrdersScreen() {
         personBreakdown: i.personBreakdown ?? [],
       })),
     );
+    setRemovedIds(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(aggregated.items)]);
 
@@ -66,8 +83,10 @@ export function AdminOrdersScreen() {
       prev.map(i => (i.menuItemId === id ? { ...i, quantity: qty } : i)),
     );
 
-  const remove = (id: string) =>
+  const remove = (id: string) => {
     setItems(prev => prev.filter(i => i.menuItemId !== id));
+    setRemovedIds(prev => new Set(prev).add(id));
+  };
 
   const toggle = (id: string) =>
     setExpanded(prev => {
@@ -88,17 +107,27 @@ export function AdminOrdersScreen() {
   const confirm = async () => {
     setConfirming(true);
     try {
+      // Preserve confirmed items not visible on this screen (imports/manual
+      // adds from the Week view) unless the admin explicitly removed them here.
+      const res = await gqlRequest<{ confirmedOrders: { mealType: string; items: EditableItem[] }[] }>(
+        CONFIRMED_ORDERS,
+        { date },
+      );
+      const confirmedItems = (res.confirmedOrders ?? [])
+        .filter(o => o.mealType === meal)
+        .flatMap(o => o.items);
+      const merged = new Map<string, { menuItemId: string; name: string; unit: string; quantity: number }>();
+      for (const it of confirmedItems) {
+        if (removedIds.has(it.menuItemId)) continue;
+        merged.set(it.menuItemId, { menuItemId: it.menuItemId, name: it.name, unit: it.unit, quantity: it.quantity });
+      }
+      for (const i of items.filter(i => i.quantity > 0)) {
+        merged.set(i.menuItemId, { menuItemId: i.menuItemId, name: i.name, unit: i.unit, quantity: i.quantity });
+      }
       await gqlRequest(CONFIRM_ORDER_WITH_ITEMS, {
         date,
         mealType: meal,
-        items: items
-          .filter(i => i.quantity > 0)
-          .map(i => ({
-            menuItemId: i.menuItemId,
-            name: i.name,
-            unit: i.unit,
-            quantity: i.quantity,
-          })),
+        items: Array.from(merged.values()),
       });
       toast.show('Order confirmed and sent to the vendor.', 'success');
       refetch();
@@ -117,8 +146,9 @@ export function AdminOrdersScreen() {
       .filter(i => !q || i.name.toLowerCase().includes(q));
   }, [menu.items, items, search]);
 
-  /** Confirm every day's breakfast/lunch/dinner for the selected week, using
-   *  each meal's aggregated selections as-is. Meals with no selections are skipped. */
+  /** Confirm every day's breakfast/lunch/dinner for the selected week. Aggregated
+   *  selections overwrite their own items; already-confirmed items (imports/manual
+   *  adds from the Week view) are preserved. Meals with no selections are skipped. */
   const handleConfirmWeek = async () => {
     const days = weekDays(wkStart);
     const combos = days.flatMap(d => MEAL_TYPES.map(m => ({ date: d, meal: m })));
@@ -128,6 +158,15 @@ export function AdminOrdersScreen() {
     let skipped = 0;
     let done = 0;
     try {
+      const confirmedRes = await gqlRequest<{ confirmedOrdersForRange: { date: string; mealType: string; items: EditableItem[] }[] }>(
+        CONFIRMED_ORDERS_FOR_RANGE,
+        { startDate: days[0], endDate: days[days.length - 1] },
+      );
+      const existingByCombo = new Map<string, EditableItem[]>();
+      for (const o of confirmedRes.confirmedOrdersForRange ?? []) {
+        const key = `${o.date}|${o.mealType}`;
+        existingByCombo.set(key, [...(existingByCombo.get(key) ?? []), ...o.items]);
+      }
       for (const { date: d, meal: m } of combos) {
         const res = await gqlRequest<{ aggregatedOrder: { items: EditableItem[] } | null }>(
           AGGREGATED_ORDER,
@@ -137,15 +176,17 @@ export function AdminOrdersScreen() {
         if (aggItems.length === 0) {
           skipped++;
         } else {
+          const merged = new Map<string, { menuItemId: string; name: string; unit: string; quantity: number }>();
+          for (const it of existingByCombo.get(`${d}|${m}`) ?? []) {
+            merged.set(it.menuItemId, { menuItemId: it.menuItemId, name: it.name, unit: it.unit, quantity: it.quantity });
+          }
+          for (const it of aggItems) {
+            merged.set(it.menuItemId, { menuItemId: it.menuItemId, name: it.name, unit: it.unit, quantity: it.quantity });
+          }
           await gqlRequest(CONFIRM_ORDER_WITH_ITEMS, {
             date: d,
             mealType: m,
-            items: aggItems.map(i => ({
-              menuItemId: i.menuItemId,
-              name: i.name,
-              unit: i.unit,
-              quantity: i.quantity,
-            })),
+            items: Array.from(merged.values()),
           });
           confirmed++;
         }
@@ -252,6 +293,23 @@ export function AdminOrdersScreen() {
           icon: mealMeta[m].icon,
         }))}
       />
+
+      <Pressable
+        onPress={handleToggleCancel}
+        disabled={cancelToggling}
+        style={[styles.cancelMealBtn, isCancelled && styles.cancelMealBtnActive]}>
+        <Text style={[styles.cancelMealBtnText, isCancelled && styles.cancelMealBtnTextActive]}>
+          {isCancelled ? '✕ Cancelled — tap to restore' : 'Cancel this meal'}
+        </Text>
+      </Pressable>
+
+      {isCancelled && (
+        <Card>
+          <Text style={styles.cancelledBanner}>
+            This meal has been cancelled — kitchen closed. Users and vendor will see this as cancelled.
+          </Text>
+        </Card>
+      )}
 
       {loading && items.length === 0 ? (
         <Loader label="Aggregating selections…" />
@@ -524,6 +582,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  cancelMealBtn: {
+    alignSelf: 'stretch',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    marginVertical: spacing.sm,
+  },
+  cancelMealBtnActive: { borderColor: colors.danger, backgroundColor: colors.dangerSoft },
+  cancelMealBtnText: { color: colors.textMuted, fontSize: font.small, fontWeight: '700' },
+  cancelMealBtnTextActive: { color: colors.danger },
+  cancelledBanner: {
+    color: colors.danger,
+    fontSize: font.small,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
   sheetList: { marginTop: spacing.sm },
   sheetItem: {
     flexDirection: 'row',

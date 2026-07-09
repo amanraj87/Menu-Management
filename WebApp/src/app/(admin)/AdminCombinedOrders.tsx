@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { useApolloClient } from '@apollo/client/react'
 import { Card, Button, Loader, Table, Thead, Tbody, Tr, Th, Td } from '@/shared/ui'
 import type { MealType } from '@/shared/types'
-import { useAggregatedOrder, useConfirmOrderWithItems, useMenuItems, useMealDoneStatus, useWeeklyExpense } from '@/shared/graphql/hooks'
-import { AGGREGATED_ORDER, CONFIRM_ORDER_WITH_ITEMS, CONFIRMED_ORDERS } from '@/shared/graphql/operations'
+import { useAggregatedOrder, useConfirmOrderWithItems, useMenuItems, useMealDoneStatus, useWeeklyExpense, useMealCancellationsForRange, useToggleMealCancellation } from '@/shared/graphql/hooks'
+import { AGGREGATED_ORDER, CONFIRM_ORDER_WITH_ITEMS, CONFIRMED_ORDERS, CONFIRMED_ORDERS_FOR_RANGE } from '@/shared/graphql/operations'
 import { useToastStore } from '@/shared/stores/toastStore'
 
 type AddedItem = { menuItemId: string; name: string; unit: string; quantity: number }
@@ -14,13 +14,12 @@ const MEALS: { id: MealType; label: string }[] = [
   { id: 'dinner', label: 'Dinner' },
 ]
 
-function toDateString(d: Date) {
-  return d.toISOString().slice(0, 10)
-}
-
 const pad = (n: number) => String(n).padStart(2, '0')
 function fmtLocal(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+function toDateString(d: Date) {
+  return fmtLocal(d)
 }
 /** Add days to a YYYY-MM-DD string, staying in local time. */
 function addDaysStr(iso: string, n: number) {
@@ -58,6 +57,13 @@ export function AdminCombinedOrders() {
   const [weekProgress, setWeekProgress] = useState('')
 
   const { weeklyExpense, isLoading: weeklyExpenseLoading } = useWeeklyExpense(weekStart)
+  const { cancellations, refetch: refetchCancellations } = useMealCancellationsForRange(date, date)
+  const { toggle: toggleCancel, isPending: toggling } = useToggleMealCancellation()
+  const isCancelled = cancellations.some(c => c.date === date && c.mealType === meal)
+  const handleToggleCancel = async () => {
+    await toggleCancel(date, meal, !isCancelled)
+    await refetchCancellations()
+  }
   const { aggregated, isLoading } = useAggregatedOrder(date, meal)
   const { items: menuItemsForMeal } = useMenuItems(meal)
   const { doneUsers } = useMealDoneStatus(date, meal)
@@ -99,18 +105,37 @@ export function AdminCombinedOrders() {
     setEditedQty((prev) => ({ ...prev, [menuItemId]: Number.isNaN(v) || v < 0 ? 0 : v }))
   }
 
-  const handleSendEdited = () => {
-    const payload = displayRows.map((row) => ({
-      menuItemId: row.menuItemId,
-      name: row.name,
-      unit: row.unit,
-      quantity: editedQty[row.menuItemId] ?? row.quantity,
-    }))
-    confirmOrderWithItems(date, meal, payload)
+  const handleSendEdited = async () => {
+    const payload = displayRows
+      .map((row) => ({
+        menuItemId: row.menuItemId,
+        name: row.name,
+        unit: row.unit,
+        quantity: editedQty[row.menuItemId] ?? row.quantity,
+      }))
+      .filter((row) => row.quantity > 0)
+    // Preserve confirmed items not visible on this page (imports/manual adds
+    // from the Week view) unless the admin explicitly removed them here.
+    const res = await client.query<{ confirmedOrders: { mealType: string; items: AddedItem[] }[] }>({
+      query: CONFIRMED_ORDERS,
+      variables: { date },
+      fetchPolicy: 'network-only',
+    })
+    const confirmedItems = (res.data?.confirmedOrders ?? [])
+      .filter((o) => o.mealType === meal)
+      .flatMap((o) => o.items)
+    const merged = new Map<string, AddedItem>()
+    for (const it of confirmedItems) {
+      if (removedIds[it.menuItemId]) continue
+      merged.set(it.menuItemId, { menuItemId: it.menuItemId, name: it.name, unit: it.unit, quantity: it.quantity })
+    }
+    for (const it of payload) merged.set(it.menuItemId, it)
+    confirmOrderWithItems(date, meal, Array.from(merged.values()))
   }
 
-  /** Confirm every day's breakfast/lunch/dinner for the selected week, using
-   *  each meal's aggregated selections as-is. Meals with no selections are skipped. */
+  /** Confirm every day's breakfast/lunch/dinner for the selected week. Aggregated
+   *  selections overwrite their own items; already-confirmed items (imports/manual
+   *  adds from the Week view) are preserved. Meals with no selections are skipped. */
   const handleConfirmWeek = async () => {
     const days = Array.from({ length: 7 }, (_, i) => addDaysStr(weekStart, i))
     const combos = days.flatMap((d) => MEALS.map((m) => ({ date: d, meal: m.id })))
@@ -120,6 +145,16 @@ export function AdminCombinedOrders() {
     let skipped = 0
     let done = 0
     try {
+      const confirmedRes = await client.query<{ confirmedOrdersForRange: { date: string; mealType: string; items: AddedItem[] }[] }>({
+        query: CONFIRMED_ORDERS_FOR_RANGE,
+        variables: { startDate: days[0], endDate: days[6] },
+        fetchPolicy: 'network-only',
+      })
+      const existingByCombo = new Map<string, AddedItem[]>()
+      for (const o of confirmedRes.data?.confirmedOrdersForRange ?? []) {
+        const key = `${o.date}|${o.mealType}`
+        existingByCombo.set(key, [...(existingByCombo.get(key) ?? []), ...o.items])
+      }
       for (const { date: d, meal: m } of combos) {
         const res = await client.query<{ aggregatedOrder: { items: AddedItem[] } | null }>({
           query: AGGREGATED_ORDER,
@@ -130,18 +165,16 @@ export function AdminCombinedOrders() {
         if (aggItems.length === 0) {
           skipped++
         } else {
+          const merged = new Map<string, AddedItem>()
+          for (const it of existingByCombo.get(`${d}|${m}`) ?? []) {
+            merged.set(it.menuItemId, { menuItemId: it.menuItemId, name: it.name, unit: it.unit, quantity: it.quantity })
+          }
+          for (const it of aggItems) {
+            merged.set(it.menuItemId, { menuItemId: it.menuItemId, name: it.name, unit: it.unit, quantity: it.quantity })
+          }
           await client.mutate({
             mutation: CONFIRM_ORDER_WITH_ITEMS,
-            variables: {
-              date: d,
-              mealType: m,
-              items: aggItems.map((i) => ({
-                menuItemId: i.menuItemId,
-                name: i.name,
-                unit: i.unit,
-                quantity: i.quantity,
-              })),
-            },
+            variables: { date: d, mealType: m, items: Array.from(merged.values()) },
           })
           confirmed++
         }
@@ -256,7 +289,22 @@ export function AdminCombinedOrders() {
               ))}
             </select>
           </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+            <button
+              className={isCancelled ? 'btn btn-danger btn-sm' : 'btn btn-outline btn-sm'}
+              onClick={handleToggleCancel}
+              disabled={toggling}
+              style={{ whiteSpace: 'nowrap' }}
+            >
+              {isCancelled ? '✕ Cancelled — click to restore' : 'Cancel this meal'}
+            </button>
+          </div>
         </div>
+        {isCancelled && (
+          <div style={{ padding: '0.6rem 0.75rem', background: 'rgba(239,68,68,0.08)', border: '1px solid var(--color-danger, #ef4444)', borderRadius: 8, marginBottom: '1rem', color: 'var(--color-danger, #ef4444)', fontWeight: 600, fontSize: '0.875rem' }}>
+            This meal has been cancelled — kitchen closed. Users and vendor will see this as cancelled.
+          </div>
+        )}
         {isLoading ? (
           <Loader />
         ) : !hasDisplayRows && items.length === 0 ? (

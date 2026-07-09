@@ -352,15 +352,17 @@ export const GET_SETTINGS = gql`
   query GetSettings {
     getSettings {
       monthlyMealCap
+      deliveryCharge
       updatedAt
     }
   }
 `
 
 export const UPDATE_SETTINGS = gql`
-  mutation UpdateSettings($monthlyMealCap: Float) {
-    updateSettings(monthlyMealCap: $monthlyMealCap) {
+  mutation UpdateSettings($monthlyMealCap: Float, $deliveryCharge: Float) {
+    updateSettings(monthlyMealCap: $monthlyMealCap, deliveryCharge: $deliveryCharge) {
       monthlyMealCap
+      deliveryCharge
       updatedAt
     }
   }
@@ -369,6 +371,46 @@ export const UPDATE_SETTINGS = gql`
 export const WEEKLY_EXPENSE = gql`
   query WeeklyExpense($startDate: String!) {
     weeklyExpense(startDate: $startDate)
+  }
+`
+
+export const MEAL_CANCELLATIONS_FOR_RANGE = gql`
+  query MealCancellationsForRange($startDate: String!, $endDate: String!) {
+    mealCancellationsForRange(startDate: $startDate, endDate: $endDate) {
+      id
+      date
+      mealType
+    }
+  }
+`
+
+export const TOGGLE_MEAL_CANCELLATION = gql`
+  mutation ToggleMealCancellation($date: String!, $mealType: MealType!, $cancelled: Boolean!) {
+    toggleMealCancellation(date: $date, mealType: $mealType, cancelled: $cancelled)
+  }
+`
+
+export const VENDOR_DAY_NOTES_FOR_RANGE = gql`
+  query VendorDayNotesForRange($startDate: String!, $endDate: String!) {
+    vendorDayNotesForRange(startDate: $startDate, endDate: $endDate) {
+      id
+      date
+      finalAmount
+      comment
+      updatedAt
+    }
+  }
+`
+
+export const UPDATE_VENDOR_DAY_NOTE = gql`
+  mutation UpdateVendorDayNote($date: String!, $finalAmount: Float, $comment: String!) {
+    updateVendorDayNote(date: $date, finalAmount: $finalAmount, comment: $comment) {
+      id
+      date
+      finalAmount
+      comment
+      updatedAt
+    }
   }
 `
 

@@ -3,7 +3,7 @@ import { getDb } from '../db.js'
 import { COLLECTIONS } from '../constants/collections.js'
 import type { ContextUser } from '../types.js'
 import type { MealType } from '../types.js'
-import type { SelectionDoc, SelectionItemDoc, MenuItemDoc, SettingsDoc } from '../types.js'
+import type { SelectionDoc, SelectionItemDoc, MenuItemDoc, SettingsDoc, MealOptOutDoc, MealCancellationDoc } from '../types.js'
 
 function toSelection(doc: SelectionDoc | null): Record<string, unknown> | null {
   if (!doc) return null
@@ -35,6 +35,13 @@ export async function mySelection(
 
 const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner']
 
+/** Add n days to a YYYY-MM-DD string using UTC-only math (no local-timezone drift). */
+function addDaysISO(dateStr: string, n: number): string {
+  const d = new Date(dateStr + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
 export async function mySelectionsForWeek(
   _: unknown,
   args: { startDate: string },
@@ -44,11 +51,8 @@ export async function mySelectionsForWeek(
   if (!user) return []
   const db = getDb()
   const results: Record<string, unknown>[] = []
-  const start = new Date(args.startDate + 'T00:00:00')
   for (let d = 0; d < 7; d++) {
-    const date = new Date(start)
-    date.setDate(start.getDate() + d)
-    const dateStr = date.toISOString().slice(0, 10)
+    const dateStr = addDaysISO(args.startDate, d)
     for (const mealType of MEAL_TYPES) {
       const doc = await db.collection(COLLECTIONS.selections).findOne({
         userId: new ObjectId(user.userId),
@@ -69,17 +73,30 @@ export async function weeklyExpense(
   const user = context.user
   if (!user || user.role !== 'admin') throw new Error('Unauthorized: admin role required')
   const db = getDb()
-  const start = new Date(args.startDate + 'T00:00:00')
   const weekDates: string[] = []
   for (let i = 0; i < 7; i++) {
-    const d = new Date(start)
-    d.setDate(start.getDate() + i)
-    weekDates.push(d.toISOString().slice(0, 10))
+    weekDates.push(addDaysISO(args.startDate, i))
   }
 
-  const selections = await db.collection(COLLECTIONS.selections).find({
+  const allSelections = await db.collection(COLLECTIONS.selections).find({
     date: { $in: weekDates },
   }).toArray() as SelectionDoc[]
+
+  // Exclude opted-out users and cancelled meals, matching aggregatedOrder semantics.
+  const optOuts = await db.collection(COLLECTIONS.meal_opt_outs).find({
+    date: { $in: weekDates },
+  }).toArray() as MealOptOutDoc[]
+  const optedOut = new Set(optOuts.map(o => `${o.date}|${o.mealType}|${o.userId.toString()}`))
+
+  const cancellations = await db.collection(COLLECTIONS.meal_cancellations).find({
+    date: { $in: weekDates },
+  }).toArray() as MealCancellationDoc[]
+  const cancelled = new Set(cancellations.map(c => `${c.date}|${c.mealType}`))
+
+  const selections = allSelections.filter(sel =>
+    !cancelled.has(`${sel.date}|${sel.mealType}`) &&
+    !optedOut.has(`${sel.date}|${sel.mealType}|${sel.userId.toString()}`)
+  )
 
   const allMenuIds = new Set<string>()
   for (const sel of selections) {

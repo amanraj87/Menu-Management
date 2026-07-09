@@ -6,7 +6,9 @@ import * as users from './users.js'
 import * as feedback from './feedback.js'
 import * as mealOptOuts from './mealOptOuts.js'
 import * as mealDone from './mealDone.js'
+import * as mealCancellations from './mealCancellations.js'
 import * as settings from './settings.js'
+import * as vendorDayNotes from './vendorDayNotes.js'
 
 export const resolvers = {
   Query: {
@@ -25,6 +27,8 @@ export const resolvers = {
     confirmedOrdersForRange: orders.confirmedOrdersForRange,
     getSettings: settings.getSettings,
     weeklyExpense: selections.weeklyExpense,
+    mealCancellationsForRange: mealCancellations.mealCancellationsForRange,
+    vendorDayNotesForRange: vendorDayNotes.vendorDayNotesForRange,
     feedbacksForAdmin: feedback.feedbacksForAdmin,
     confirmedFeedbacks: feedback.confirmedFeedbacks,
   },
@@ -44,5 +48,7 @@ export const resolvers = {
     confirmFeedback: feedback.confirmFeedback,
     rejectFeedback: feedback.rejectFeedback,
     updateSettings: settings.updateSettings,
+    toggleMealCancellation: mealCancellations.toggleMealCancellation,
+    updateVendorDayNote: vendorDayNotes.updateVendorDayNote,
   },
 }

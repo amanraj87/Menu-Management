@@ -14,6 +14,8 @@ import {
   CONFIRMED_ORDERS_FOR_RANGE,
   GET_SETTINGS,
   WEEKLY_EXPENSE,
+  MEAL_CANCELLATIONS_FOR_RANGE,
+  VENDOR_DAY_NOTES_FOR_RANGE,
 } from './operations';
 import type {
   AggregatedOrder,
@@ -272,12 +274,13 @@ export function useConfirmedOrdersForRange(startDate: string, endDate: string) {
 
 export interface Settings {
   monthlyMealCap: number | null;
+  deliveryCharge: number | null;
   updatedAt: string | null;
 }
 
 export function useSettings() {
   const q = useGqlQuery<{ getSettings: Settings }>(GET_SETTINGS);
-  return { settings: q.data?.getSettings ?? { monthlyMealCap: null, updatedAt: null }, ...q };
+  return { settings: q.data?.getSettings ?? { monthlyMealCap: null, deliveryCharge: null, updatedAt: null }, ...q };
 }
 
 export function useWeeklyExpense(startDate: string) {
@@ -287,4 +290,36 @@ export function useWeeklyExpense(startDate: string) {
     { skip: !startDate },
   );
   return { weeklyExpense: q.data?.weeklyExpense ?? 0, ...q };
+}
+
+export interface MealCancellation {
+  id: string;
+  date: string;
+  mealType: MealType;
+}
+
+export function useMealCancellationsForRange(startDate: string, endDate: string) {
+  const q = useGqlQuery<{ mealCancellationsForRange: MealCancellation[] }>(
+    MEAL_CANCELLATIONS_FOR_RANGE,
+    { startDate, endDate },
+    { skip: !startDate || !endDate },
+  );
+  return { cancellations: q.data?.mealCancellationsForRange ?? [], ...q };
+}
+
+export interface VendorDayNote {
+  id: string;
+  date: string;
+  finalAmount: number | null;
+  comment: string;
+  updatedAt: string | null;
+}
+
+export function useVendorDayNotesForRange(startDate: string, endDate: string) {
+  const q = useGqlQuery<{ vendorDayNotesForRange: VendorDayNote[] }>(
+    VENDOR_DAY_NOTES_FOR_RANGE,
+    { startDate, endDate },
+    { skip: !startDate || !endDate },
+  );
+  return { notes: q.data?.vendorDayNotesForRange ?? [], ...q };
 }

@@ -1,6 +1,5 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { VendorTodayScreen } from '../screens/vendor/VendorTodayScreen';
 import { VendorWeekScreen } from '../screens/vendor/VendorWeekScreen';
 import { VendorMenuScreen } from '../screens/vendor/VendorMenuScreen';
 import { VendorFeedbackScreen } from '../screens/vendor/VendorFeedbackScreen';
@@ -10,12 +9,7 @@ const Tab = createBottomTabNavigator();
 
 export function VendorTabs() {
   return (
-    <Tab.Navigator screenOptions={tabScreenOptions} initialRouteName="Today">
-      <Tab.Screen
-        name="Today"
-        component={VendorTodayScreen}
-        options={{ tabBarIcon: tabIcon('🍳') }}
-      />
+    <Tab.Navigator screenOptions={tabScreenOptions} initialRouteName="Week">
       <Tab.Screen
         name="Week"
         component={VendorWeekScreen}
