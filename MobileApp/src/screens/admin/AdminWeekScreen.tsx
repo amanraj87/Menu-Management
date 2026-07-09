@@ -9,7 +9,6 @@ import {
   AGGREGATED_ORDER,
   CONFIRMED_ORDERS_FOR_RANGE,
   CONFIRM_ORDER_WITH_ITEMS,
-  MEAL_CANCELLATIONS_FOR_RANGE,
   TOGGLE_MEAL_CANCELLATION,
   UPDATE_SETTINGS,
 } from '../../api/operations';
@@ -47,8 +46,6 @@ export function AdminWeekScreen() {
   const [deliverySaving, setDeliverySaving] = useState(false);
   const [weekConfirming, setWeekConfirming] = useState(false);
   const [weekProgress, setWeekProgress] = useState('');
-  const [importPending, setImportPending] = useState(false);
-  const [importProgress, setImportProgress] = useState('');
   const [collapsedDays, setCollapsedDays] = useState<Set<string>>(new Set());
   const [editingMeal, setEditingMeal] = useState<{ date: string; meal: MealType } | null>(null);
   const [editQtys, setEditQtys] = useState<Record<string, number>>({});
@@ -56,9 +53,9 @@ export function AdminWeekScreen() {
   const [editNewQty, setEditNewQty] = useState('1');
   const [editSaving, setEditSaving] = useState(false);
   // One shared guard for every write that touches confirmed orders — running
-  // confirm/import/edit concurrently (or against a stale/unloaded ordersByDate)
+  // confirm/edit concurrently (or against a stale/unloaded ordersByDate)
   // interleaves full-replace writes and loses items.
-  const writeBusy = weekConfirming || importPending || editSaving || loading;
+  const writeBusy = weekConfirming || editSaving || loading;
 
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(wkStart, i)),
@@ -103,7 +100,7 @@ export function AdminWeekScreen() {
   };
 
   const handleSaveEdit = async () => {
-    if (!editingMeal || weekConfirming || importPending || loading) return;
+    if (!editingMeal || weekConfirming || loading) return;
     const { date, meal } = editingMeal;
 
     const existing = (ordersByDate[date] ?? [])
@@ -253,75 +250,6 @@ export function AdminWeekScreen() {
     }
   };
 
-  const handleImportLastWeek = async () => {
-    if (writeBusy) return;
-    const prevStart = addDays(wkStart, -7);
-    const prevEnd = addDays(wkStart, -1);
-    setImportPending(true);
-    setImportProgress('Fetching last week…');
-    try {
-      const [res, cancelRes] = await Promise.all([
-        gqlRequest<{ confirmedOrdersForRange: any[] }>(
-          CONFIRMED_ORDERS_FOR_RANGE,
-          { startDate: prevStart, endDate: prevEnd },
-        ),
-        gqlRequest<{ mealCancellationsForRange: { date: string; mealType: string }[] }>(
-          MEAL_CANCELLATIONS_FOR_RANGE,
-          { startDate: prevStart, endDate: prevEnd },
-        ),
-      ]);
-      // Skip meals that were cancelled last week — they didn't count toward
-      // last week's total, so importing them would inflate this week's.
-      const prevCancelled = new Set(
-        (cancelRes.mealCancellationsForRange ?? []).map(c => `${c.date}|${c.mealType}`),
-      );
-      const prevOrders = (res.confirmedOrdersForRange ?? [])
-        .filter((o: any) => !prevCancelled.has(`${o.date}|${o.mealType}`));
-      if (prevOrders.length === 0) {
-        toast.show('No confirmed orders found in the previous week.', 'info');
-        return;
-      }
-      const grouped = new Map<string, { date: string; mealType: string; items: Map<string, { menuItemId: string; name: string; unit: string; quantity: number }> }>();
-      for (const order of prevOrders) {
-        const key = `${order.date}|${order.mealType}`;
-        if (!grouped.has(key)) grouped.set(key, { date: order.date, mealType: order.mealType, items: new Map() });
-        const g = grouped.get(key)!;
-        for (const i of order.items) {
-          const existing = g.items.get(i.menuItemId);
-          if (existing) existing.quantity += i.quantity;
-          else g.items.set(i.menuItemId, { menuItemId: i.menuItemId, name: i.name, unit: i.unit, quantity: i.quantity });
-        }
-      }
-      const entries = Array.from(grouped.values());
-      let done = 0;
-      for (const g of entries) {
-        const newDate = addDays(g.date, 7);
-        // Merge with what's already confirmed this week — existing items win,
-        // imported items only fill the gaps. Never overwrite current orders.
-        const existing = (ordersByDate[newDate] ?? [])
-          .filter(o => o.mealType === g.mealType)
-          .flatMap(o => o.items);
-        const merged = new Map<string, { menuItemId: string; name: string; unit: string; quantity: number }>();
-        for (const it of g.items.values()) merged.set(it.menuItemId, it);
-        for (const it of existing) merged.set(it.menuItemId, { menuItemId: it.menuItemId, name: it.name, unit: it.unit, quantity: it.quantity });
-        await gqlRequest(CONFIRM_ORDER_WITH_ITEMS, {
-          date: newDate,
-          mealType: g.mealType,
-          items: Array.from(merged.values()),
-        });
-        done++;
-        setImportProgress(`Importing ${done}/${entries.length}…`);
-      }
-      toast.show(`Imported ${entries.length} meal${entries.length === 1 ? '' : 's'} from last week.`, 'success');
-      await load();
-    } catch (e) {
-      toast.show((e as Error).message, 'error');
-    } finally {
-      setImportPending(false);
-      setImportProgress('');
-    }
-  };
-
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -465,15 +393,6 @@ export function AdminWeekScreen() {
         icon="✓"
         onPress={handleConfirmWeek}
         loading={weekConfirming}
-        disabled={writeBusy}
-        fullWidth
-      />
-      <Button
-        title={importPending ? (importProgress || 'Importing…') : 'Import from last week'}
-        icon="📋"
-        variant="outline"
-        onPress={handleImportLastWeek}
-        loading={importPending}
         disabled={writeBusy}
         fullWidth
       />

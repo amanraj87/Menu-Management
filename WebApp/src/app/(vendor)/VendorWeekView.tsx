@@ -3,7 +3,7 @@ import { useConfirmedOrdersForRange, useMenuItems, useSettings, useMealCancellat
 import { Card, Loader } from '@/shared/ui'
 import { Link } from 'react-router-dom'
 import { useToastStore } from '@/shared/stores/toastStore'
-import type { ConfirmedOrder, MealType } from '@/shared/types'
+import type { ConfirmedOrder } from '@/shared/types'
 
 function toDateString(d: Date) {
   const y = d.getFullYear()
