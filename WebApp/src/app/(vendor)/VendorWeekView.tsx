@@ -66,11 +66,24 @@ export function VendorWeekView() {
   const weekEnd = addDays(weekStart, 6)
   const dates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart])
 
-  const { orders, isLoading: ordersLoading } = useConfirmedOrdersForRange(weekStart, weekEnd)
+  const { orders, isLoading: ordersLoading, refetch: refetchOrders } = useConfirmedOrdersForRange(weekStart, weekEnd)
+  const [refreshing, setRefreshing] = useState(false)
   const { items: menuItems, isLoading: menuLoading } = useMenuItems()
   const { settings, isLoading: settingsLoading } = useSettings()
-  const { cancellations, isLoading: cancelLoading } = useMealCancellationsForRange(weekStart, weekEnd)
+  const { cancellations, isLoading: cancelLoading, refetch: refetchCancellations } = useMealCancellationsForRange(weekStart, weekEnd)
   const { notes, isLoading: notesLoading, refetch: refetchNotes } = useVendorDayNotesForRange(weekStart, weekEnd)
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await Promise.all([refetchOrders(), refetchCancellations(), refetchNotes()])
+      toast.add('Refreshed.', 'success')
+    } catch (e) {
+      toast.add((e as Error).message, 'error')
+    } finally {
+      setRefreshing(false)
+    }
+  }
   const { update: updateNote, isPending: noteSaving } = useUpdateVendorDayNote()
   const toast = useToastStore()
 
@@ -159,7 +172,10 @@ export function VendorWeekView() {
   if (isLoading) return <Loader />
 
   const todayStr = toDateString(new Date())
-  const calcDayTotal = (d: DayData) => d.mealsTotal + (d.mealsTotal > 0 ? delivery : 0)
+  // Delivery is charged per active meal (has an order and not cancelled).
+  const activeMealsOf = (d: DayData) => MEALS.filter(({ id }) => !d.cancelled[id] && d.subtotals[id] > 0).length
+  const deliveryOf = (d: DayData) => delivery * activeMealsOf(d)
+  const calcDayTotal = (d: DayData) => d.mealsTotal + deliveryOf(d)
   const effectiveDayTotal = (d: DayData) => notesByDate[d.date]?.finalAmount ?? calcDayTotal(d)
   const weekTotal = week.reduce((sum, d) => sum + effectiveDayTotal(d), 0)
   const expenseTillNow = week.reduce((sum, d) => sum + (d.date <= todayStr ? effectiveDayTotal(d) : 0), 0)
@@ -176,6 +192,9 @@ export function VendorWeekView() {
               <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Confirmed orders</div>
             </div>
             <button className="btn btn-outline btn-sm" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="Next week">›</button>
+            <button className="btn btn-outline btn-sm" onClick={handleRefresh} disabled={refreshing} aria-label="Refresh" title="Refresh confirmed orders" style={{ marginLeft: '0.25rem' }}>
+              {refreshing ? '…' : '↻ Refresh'}
+            </button>
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Expense</div>
@@ -273,7 +292,7 @@ export function VendorWeekView() {
                   {/* Day footer: meals + delivery = total */}
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1.5rem', flexWrap: 'wrap', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid var(--color-border)', fontSize: '0.875rem' }}>
                     <span style={{ color: 'var(--color-text-muted)' }}>Meals <strong style={{ color: 'var(--color-text)' }}>{money(d.mealsTotal)}</strong></span>
-                    <span style={{ color: 'var(--color-text-muted)' }}>Delivery <strong style={{ color: 'var(--color-text)' }}>{delivery > 0 && d.mealsTotal > 0 ? money(delivery) : '—'}</strong></span>
+                    <span style={{ color: 'var(--color-text-muted)' }}>Delivery <strong style={{ color: 'var(--color-text)' }}>{deliveryOf(d) > 0 ? `${money(deliveryOf(d))} (${activeMealsOf(d)} × ${money(delivery)})` : '—'}</strong></span>
                     <span style={{ color: 'var(--color-text-muted)' }}>Day total <strong style={{ color: 'var(--color-primary)', fontSize: '1rem' }}>{money(calcTotal)}</strong></span>
                   </div>
 

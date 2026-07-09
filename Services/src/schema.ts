@@ -187,6 +187,8 @@ export const typeDefs = `#graphql
     """Selections for 7 days starting at startDate (YYYY-MM-DD), for current user. 21 entries (7 days x 3 meals)."""
     mySelectionsForWeek(startDate: String!): [Selection!]!
     aggregatedOrder(date: String!, mealType: MealType!): AggregatedOrder!
+    """Aggregated live user selections for a date range (inclusive), grouped by date+meal."""
+    aggregatedOrdersForRange(startDate: String!, endDate: String!): [AggregatedOrder!]!
     confirmedOrders(date: String!): [ConfirmedOrder!]!
     """Confirmed orders for a date range (inclusive)."""
     confirmedOrdersForRange(startDate: String!, endDate: String!): [ConfirmedOrder!]!

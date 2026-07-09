@@ -85,6 +85,80 @@ export async function aggregatedOrder(
   return { date: args.date, mealType: args.mealType, items }
 }
 
+export async function aggregatedOrdersForRange(
+  _: unknown,
+  args: { startDate: string; endDate: string }
+): Promise<Record<string, unknown>[]> {
+  const db = getDb()
+
+  const optOuts = await db
+    .collection(COLLECTIONS.meal_opt_outs)
+    .find({ date: { $gte: args.startDate, $lte: args.endDate } })
+    .toArray() as MealOptOutDoc[]
+  const optedOut = new Set(optOuts.map(o => `${o.date}|${o.mealType}|${o.userId.toString()}`))
+
+  const allSelections = await db
+    .collection(COLLECTIONS.selections)
+    .find({ date: { $gte: args.startDate, $lte: args.endDate } })
+    .toArray() as SelectionDoc[]
+  const selections = allSelections.filter(
+    s => !optedOut.has(`${s.date}|${s.mealType}|${s.userId.toString()}`)
+  )
+
+  const menuItemIds = new Set<string>()
+  const userIds = new Set<string>()
+  for (const s of selections) {
+    userIds.add(s.userId.toString())
+    for (const i of s.items) menuItemIds.add(i.menuItemId.toString())
+  }
+  if (selections.length === 0) return []
+
+  const menuItems = await db
+    .collection(COLLECTIONS.menu_items)
+    .find({ _id: { $in: Array.from(menuItemIds).map(id => new ObjectId(id)) } })
+    .toArray() as MenuItemDoc[]
+  const menuMap = new Map(menuItems.map(m => [m._id.toString(), m]))
+
+  const users = await db
+    .collection(COLLECTIONS.users)
+    .find({ _id: { $in: Array.from(userIds).map(id => new ObjectId(id)) } })
+    .toArray() as UserDoc[]
+  const userMap = new Map(users.map(u => [u._id.toString(), u]))
+
+  // Group selections by date+mealType, then aggregate per menu item.
+  const byCombo = new Map<string, { date: string; mealType: MealType; byItem: Map<string, { total: number; byUser: Map<string, number> }> }>()
+  for (const sel of selections) {
+    const comboKey = `${sel.date}|${sel.mealType}`
+    if (!byCombo.has(comboKey)) byCombo.set(comboKey, { date: sel.date, mealType: sel.mealType, byItem: new Map() })
+    const combo = byCombo.get(comboKey)!
+    const uid = sel.userId.toString()
+    for (const i of sel.items) {
+      const key = i.menuItemId.toString()
+      if (!combo.byItem.has(key)) combo.byItem.set(key, { total: 0, byUser: new Map() })
+      const entry = combo.byItem.get(key)!
+      entry.total += i.quantity
+      entry.byUser.set(uid, (entry.byUser.get(uid) ?? 0) + i.quantity)
+    }
+  }
+
+  const result: Record<string, unknown>[] = []
+  for (const combo of byCombo.values()) {
+    const items: Record<string, unknown>[] = []
+    for (const [menuItemId, entry] of combo.byItem) {
+      const menu = menuMap.get(menuItemId)
+      if (!menu) continue
+      const personBreakdown = Array.from(entry.byUser.entries()).map(([uid, quantity]) => ({
+        userId: uid,
+        userName: userMap.get(uid)?.name ?? 'Unknown',
+        quantity,
+      }))
+      items.push({ menuItemId, name: menu.name, unit: menu.unit, quantity: entry.total, personBreakdown })
+    }
+    if (items.length > 0) result.push({ date: combo.date, mealType: combo.mealType, items })
+  }
+  return result
+}
+
 export async function confirmOrder(
   _: unknown,
   args: { date: string; mealType: MealType },

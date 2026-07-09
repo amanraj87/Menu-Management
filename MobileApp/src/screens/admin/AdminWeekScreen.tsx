@@ -7,6 +7,7 @@ import { SignOutButton } from '../../ui/SignOutButton';
 import { gqlRequest } from '../../api/client';
 import {
   AGGREGATED_ORDER,
+  AGGREGATED_ORDERS_FOR_RANGE,
   CONFIRMED_ORDERS_FOR_RANGE,
   CONFIRM_ORDER_WITH_ITEMS,
   TOGGLE_MEAL_CANCELLATION,
@@ -26,11 +27,14 @@ function dayName(iso: string): string {
 }
 
 type Row = { menuItemId: string; name: string; unit: string; qty: number; unitPrice: number; amount: number };
+type PendingItem = { menuItemId: string; name: string; unit: string; aggQty: number; confirmedQty: number };
 
 export function AdminWeekScreen() {
   const toast = useToast();
   const [wkStart, setWkStart] = useState(() => getWeekStart(todayISO()));
   const [ordersByDate, setOrdersByDate] = useState<Record<string, ConfirmedOrder[]>>({});
+  // Live user selections keyed by `${date}|${meal}` → (menuItemId → {name, unit, qty}).
+  const [aggByKey, setAggByKey] = useState<Record<string, Record<string, { name: string; unit: string; qty: number }>>>({});
   const [loading, setLoading] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -253,16 +257,31 @@ export function AdminWeekScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await gqlRequest<{ confirmedOrdersForRange: any[] }>(
-        CONFIRMED_ORDERS_FOR_RANGE,
-        { startDate: wkStart, endDate: wkEnd },
-      );
+      const [res, aggRes] = await Promise.all([
+        gqlRequest<{ confirmedOrdersForRange: any[] }>(
+          CONFIRMED_ORDERS_FOR_RANGE,
+          { startDate: wkStart, endDate: wkEnd },
+        ),
+        gqlRequest<{ aggregatedOrdersForRange: any[] }>(
+          AGGREGATED_ORDERS_FOR_RANGE,
+          { startDate: wkStart, endDate: wkEnd },
+        ),
+      ]);
       const map: Record<string, ConfirmedOrder[]> = {};
       (res.confirmedOrdersForRange ?? []).forEach((o: any) => {
         const order = { ...o, _id: o.id };
         (map[o.date] = map[o.date] ?? []).push(order);
       });
       setOrdersByDate(map);
+      const agg: Record<string, Record<string, { name: string; unit: string; qty: number }>> = {};
+      (aggRes.aggregatedOrdersForRange ?? []).forEach((a: any) => {
+        const items: Record<string, { name: string; unit: string; qty: number }> = {};
+        (a.items ?? []).forEach((it: any) => {
+          items[it.menuItemId] = { name: it.name, unit: it.unit, qty: it.quantity };
+        });
+        agg[`${a.date}|${a.mealType}`] = items;
+      });
+      setAggByKey(agg);
     } catch (e) {
       toast.show(`Failed to load week: ${(e as Error).message}`, 'error');
     } finally {
@@ -275,6 +294,9 @@ export function AdminWeekScreen() {
   const buildMeals = (date: string, orders: ConfirmedOrder[]) => {
     const meals: Record<MealType, Row[]> = { breakfast: [], lunch: [], dinner: [] };
     const subtotals: Record<MealType, number> = { breakfast: 0, lunch: 0, dinner: 0 };
+    const confirmedQtys: Record<MealType, Map<string, number>> = {
+      breakfast: new Map(), lunch: new Map(), dinner: new Map(),
+    };
     const cancelled: Record<MealType, boolean> = {
       breakfast: cancelledSet.has(`${date}|breakfast`),
       lunch: cancelledSet.has(`${date}|lunch`),
@@ -286,21 +308,38 @@ export function AdminWeekScreen() {
         const amount = unitPrice * it.quantity;
         meals[o.mealType].push({ menuItemId: it.menuItemId, name: it.name, unit: it.unit, qty: it.quantity, unitPrice, amount });
         subtotals[o.mealType] += amount;
+        confirmedQtys[o.mealType].set(it.menuItemId, it.quantity);
       });
     });
+    // Compare live user selections against what's confirmed — any add/change is
+    // flagged as pending (not yet sent to the kitchen).
+    const pending: Record<MealType, PendingItem[]> = { breakfast: [], lunch: [], dinner: [] };
+    for (const m of MEAL_TYPES) {
+      const agg = aggByKey[`${date}|${m}`];
+      if (!agg) continue;
+      for (const menuItemId of Object.keys(agg)) {
+        const info = agg[menuItemId];
+        const confirmedQty = confirmedQtys[m].get(menuItemId) ?? 0;
+        if (info.qty !== confirmedQty) {
+          pending[m].push({ menuItemId, name: info.name, unit: info.unit, aggQty: info.qty, confirmedQty });
+        }
+      }
+    }
     const mealsTotal = MEAL_TYPES.reduce((s, m) => s + (cancelled[m] ? 0 : subtotals[m]), 0);
-    return { meals, subtotals, cancelled, mealsTotal };
+    // Delivery is charged per active meal (has an order and not cancelled).
+    const activeMeals = MEAL_TYPES.filter(m => !cancelled[m] && subtotals[m] > 0).length;
+    return { meals, subtotals, cancelled, pending, mealsTotal, activeMeals };
   };
 
   const today = todayISO();
   const weekTotal = days.reduce((sum, date) => {
-    const { mealsTotal } = buildMeals(date, ordersByDate[date] ?? []);
-    return sum + mealsTotal + (mealsTotal > 0 ? delivery : 0);
+    const { mealsTotal, activeMeals } = buildMeals(date, ordersByDate[date] ?? []);
+    return sum + mealsTotal + delivery * activeMeals;
   }, 0);
   const expenseTillNow = days.reduce((sum, date) => {
     if (date > today) return sum;
-    const { mealsTotal } = buildMeals(date, ordersByDate[date] ?? []);
-    return sum + mealsTotal + (mealsTotal > 0 ? delivery : 0);
+    const { mealsTotal, activeMeals } = buildMeals(date, ordersByDate[date] ?? []);
+    return sum + mealsTotal + delivery * activeMeals;
   }, 0);
 
   return (
@@ -315,7 +354,7 @@ export function AdminWeekScreen() {
         <Pressable onPress={() => setSettingsOpen(!settingsOpen)} style={styles.settingsHeader}>
           <Text style={styles.settingsTitle}>Settings</Text>
           <Text style={styles.settingsSummary}>
-            Cap: {settings.monthlyMealCap != null ? `₹${settings.monthlyMealCap}/mo` : 'None'} · Delivery: {settings.deliveryCharge != null ? `₹${settings.deliveryCharge}` : 'None'} {settingsOpen ? '▴' : '▾'}
+            Cap: {settings.monthlyMealCap != null ? `₹${settings.monthlyMealCap}/mo` : 'None'} · Delivery: {settings.deliveryCharge != null ? `₹${settings.deliveryCharge}/meal` : 'None'} {settingsOpen ? '▴' : '▾'}
           </Text>
         </Pressable>
         {settingsOpen && (
@@ -345,12 +384,12 @@ export function AdminWeekScreen() {
             )}
 
             {/* Delivery charge */}
-            <SectionLabel>Delivery Charge</SectionLabel>
+            <SectionLabel>Delivery Charge (per meal)</SectionLabel>
             {!deliveryEditing ? (
               <View style={styles.settingRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.settingValue}>
-                    {settings.deliveryCharge != null ? `₹${settings.deliveryCharge}` : 'No charge set'}
+                    {settings.deliveryCharge != null ? `₹${settings.deliveryCharge}/meal` : 'No charge set'}
                   </Text>
                 </View>
                 <Button title="Edit" variant="outline" onPress={() => { setDeliveryInput(settings.deliveryCharge != null ? String(settings.deliveryCharge) : ''); setDeliveryEditing(true); }} />
@@ -402,8 +441,9 @@ export function AdminWeekScreen() {
       ) : (
         days.map(date => {
           const orders = ordersByDate[date] ?? [];
-          const { meals, subtotals, cancelled, mealsTotal } = buildMeals(date, orders);
-          const dayTotal = mealsTotal + (mealsTotal > 0 ? delivery : 0);
+          const { meals, subtotals, cancelled, pending, mealsTotal, activeMeals } = buildMeals(date, orders);
+          const deliveryTotal = delivery * activeMeals;
+          const dayTotal = mealsTotal + deliveryTotal;
           const collapsed = collapsedDays.has(date);
           const vendorNote = vendorNotesByDate[date];
 
@@ -430,12 +470,19 @@ export function AdminWeekScreen() {
                     const rows = meals[meal];
                     const isCancelled = cancelled[meal];
                     const isEditing = editingMeal?.date === date && editingMeal?.meal === meal;
+                    const pendingItems = pending[meal];
+                    const hasPending = !isCancelled && pendingItems.length > 0;
                     return (
                       <View key={meal} style={[styles.mealGroup, isCancelled && styles.mealGroupCancelled]}>
                         <View style={styles.mealHeadRow}>
-                          <Text style={[styles.mealLabel, isCancelled && styles.mealLabelCancelled]}>
-                            {mealMeta[meal].icon} {mealMeta[meal].label}
-                          </Text>
+                          <View style={styles.mealHeadLeft}>
+                            <Text style={[styles.mealLabel, isCancelled && styles.mealLabelCancelled]}>
+                              {mealMeta[meal].icon} {mealMeta[meal].label}
+                            </Text>
+                            {hasPending && (
+                              <Text style={styles.pendingBadge}>⏳ {pendingItems.length} pending</Text>
+                            )}
+                          </View>
                           <View style={styles.mealActions}>
                             {!isCancelled && !isEditing && (
                               <Pressable
@@ -527,6 +574,20 @@ export function AdminWeekScreen() {
                                 </View>
                               </>
                             )}
+                            {!isEditing && hasPending && (
+                              <View style={styles.pendingBox}>
+                                <Text style={styles.pendingTitle}>Pending — not yet sent to Shefs</Text>
+                                {pendingItems.map(p => (
+                                  <View key={p.menuItemId} style={styles.pendingRow}>
+                                    <Text style={styles.pendingName} numberOfLines={1}>{p.name}</Text>
+                                    <Text style={styles.pendingQty}>
+                                      {p.aggQty} {p.unit}
+                                      {p.confirmedQty > 0 ? ` (sent: ${p.confirmedQty})` : ''}
+                                    </Text>
+                                  </View>
+                                ))}
+                              </View>
+                            )}
                           </>
                         )}
                       </View>
@@ -534,8 +595,8 @@ export function AdminWeekScreen() {
                   })}
                   <View style={styles.dayFooter}>
                     <View style={styles.footerLine}>
-                      <Text style={styles.footerLabel}>Delivery</Text>
-                      <Text style={styles.footerValue}>{delivery > 0 && mealsTotal > 0 ? `₹${Math.round(delivery)}` : '—'}</Text>
+                      <Text style={styles.footerLabel}>Delivery{deliveryTotal > 0 ? ` (${activeMeals} × ₹${Math.round(delivery)})` : ''}</Text>
+                      <Text style={styles.footerValue}>{deliveryTotal > 0 ? `₹${Math.round(deliveryTotal)}` : '—'}</Text>
                     </View>
                     <View style={styles.footerLine}>
                       <Text style={styles.footerTotalLabel}>Day total</Text>
@@ -689,7 +750,30 @@ const styles = StyleSheet.create({
   mealGroup: { marginTop: spacing.md },
   mealGroupCancelled: { opacity: 0.6 },
   mealHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
+  mealHeadLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flex: 1, flexWrap: 'wrap' },
   mealLabel: { color: colors.textMuted, fontSize: font.small, fontWeight: '700' },
+  pendingBadge: {
+    fontSize: font.tiny,
+    fontWeight: '700',
+    color: colors.warning,
+    backgroundColor: 'rgba(245,158,11,0.16)',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  pendingBox: {
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radius.sm,
+    backgroundColor: 'rgba(245,158,11,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.35)',
+  },
+  pendingTitle: { color: colors.warning, fontSize: font.tiny, fontWeight: '700', marginBottom: 4 },
+  pendingRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm, paddingVertical: 2 },
+  pendingName: { flex: 1, color: colors.text, fontSize: font.small },
+  pendingQty: { color: colors.text, fontSize: font.small, fontWeight: '600' },
   mealLabelCancelled: { textDecorationLine: 'line-through' },
   toggleTrack: {
     width: 36,

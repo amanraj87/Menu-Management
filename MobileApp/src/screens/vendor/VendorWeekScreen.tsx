@@ -133,13 +133,15 @@ export function VendorWeekScreen() {
       });
     });
     const mealsTotal = MEAL_TYPES.reduce((s, m) => s + (cancelled[m] ? 0 : subtotals[m]), 0);
-    return { meals, subtotals, cancelled, mealsTotal };
+    // Delivery is charged per active meal (has an order and not cancelled).
+    const activeMeals = MEAL_TYPES.filter(m => !cancelled[m] && subtotals[m] > 0).length;
+    return { meals, subtotals, cancelled, mealsTotal, activeMeals };
   };
 
   const today = todayISO();
   const calcDayTotal = (date: string) => {
-    const { mealsTotal } = buildMeals(date, ordersByDate[date] ?? []);
-    return mealsTotal + (mealsTotal > 0 ? delivery : 0);
+    const { mealsTotal, activeMeals } = buildMeals(date, ordersByDate[date] ?? []);
+    return mealsTotal + delivery * activeMeals;
   };
   const effectiveDayTotal = (date: string) => notesByDate[date]?.finalAmount ?? calcDayTotal(date);
   const weekTotal = days.reduce((sum, date) => sum + effectiveDayTotal(date), 0);
@@ -167,13 +169,22 @@ export function VendorWeekScreen() {
         </Pressable>
       </View>
 
+      <Button
+        title="↻ Refresh orders"
+        variant="outline"
+        onPress={load}
+        loading={loading}
+        fullWidth
+      />
+
       {loading && Object.keys(ordersByDate).length === 0 ? (
         <Loader label="Loading week…" />
       ) : (
         days.map(date => {
           const orders = ordersByDate[date] ?? [];
-          const { meals, subtotals, cancelled, mealsTotal } = buildMeals(date, orders);
-          const calcTotal = mealsTotal + (mealsTotal > 0 ? delivery : 0);
+          const { meals, subtotals, cancelled, mealsTotal, activeMeals } = buildMeals(date, orders);
+          const deliveryTotal = delivery * activeMeals;
+          const calcTotal = mealsTotal + deliveryTotal;
           const dayTotal = effectiveDayTotal(date);
           const note = notesByDate[date];
           const hasOverride = note?.finalAmount != null;
@@ -247,8 +258,8 @@ export function VendorWeekScreen() {
                   {/* Delivery + day total */}
                   <View style={styles.dayFooter}>
                     <View style={styles.footerLine}>
-                      <Text style={styles.footerLabel}>Delivery</Text>
-                      <Text style={styles.footerValue}>{delivery > 0 && mealsTotal > 0 ? `₹${Math.round(delivery)}` : '—'}</Text>
+                      <Text style={styles.footerLabel}>Delivery{deliveryTotal > 0 ? ` (${activeMeals} × ₹${Math.round(delivery)})` : ''}</Text>
+                      <Text style={styles.footerValue}>{deliveryTotal > 0 ? `₹${Math.round(deliveryTotal)}` : '—'}</Text>
                     </View>
                     <View style={styles.footerLine}>
                       <Text style={styles.footerTotalLabel}>Day total</Text>

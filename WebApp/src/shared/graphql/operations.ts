@@ -166,6 +166,22 @@ export const AGGREGATED_ORDER = gql`
   }
 `
 
+export const AGGREGATED_ORDERS_FOR_RANGE = gql`
+  query AggregatedOrdersForRange($startDate: String!, $endDate: String!) {
+    aggregatedOrdersForRange(startDate: $startDate, endDate: $endDate) {
+      date
+      mealType
+      items {
+        menuItemId
+        name
+        unit
+        quantity
+        personBreakdown { userId userName quantity }
+      }
+    }
+  }
+`
+
 export const CONFIRM_ORDER = gql`
   mutation ConfirmOrder($date: String!, $mealType: MealType!) {
     confirmOrder(date: $date, mealType: $mealType) {

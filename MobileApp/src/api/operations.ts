@@ -88,6 +88,18 @@ export const AGGREGATED_ORDER = `
   }
 `;
 
+export const AGGREGATED_ORDERS_FOR_RANGE = `
+  query AggregatedOrdersForRange($startDate: String!, $endDate: String!) {
+    aggregatedOrdersForRange(startDate: $startDate, endDate: $endDate) {
+      date mealType
+      items {
+        menuItemId name unit quantity
+        personBreakdown { userId userName quantity }
+      }
+    }
+  }
+`;
+
 export const CONFIRM_ORDER_WITH_ITEMS = `
   mutation ConfirmOrderWithItems($date: String!, $mealType: MealType!, $items: [ConfirmedOrderItemInput!]!) {
     confirmOrderWithItems(date: $date, mealType: $mealType, items: $items) {

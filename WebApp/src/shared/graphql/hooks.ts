@@ -14,6 +14,7 @@ import {
   MY_SELECTIONS_FOR_WEEK,
   PUT_SELECTION,
   AGGREGATED_ORDER,
+  AGGREGATED_ORDERS_FOR_RANGE,
   CONFIRM_ORDER,
   CONFIRM_ORDER_WITH_ITEMS,
   CONFIRMED_ORDERS,
@@ -377,12 +378,25 @@ export function useMealDoneStatus(date: string, mealType: MealType) {
 
 interface ConfirmedOrdersForRangeData { confirmedOrdersForRange: Array<{ id: string; date: string; mealType: string; items: Array<{ menuItemId: string; name: string; unit: string; quantity: number; personBreakdown: Array<{ userId: string; userName: string; quantity: number }> }>; confirmedBy: string; confirmedAt: string }> }
 export function useConfirmedOrdersForRange(startDate: string, endDate: string) {
-  const { data, loading, error } = useQuery<ConfirmedOrdersForRangeData>(CONFIRMED_ORDERS_FOR_RANGE, {
+  const { data, loading, error, refetch } = useQuery<ConfirmedOrdersForRangeData>(CONFIRMED_ORDERS_FOR_RANGE, {
     variables: { startDate, endDate },
     skip: !startDate || !endDate,
   })
   const orders = (data?.confirmedOrdersForRange ?? []).map(toConfirmedOrder)
-  return { orders, isLoading: loading, error }
+  return { orders, isLoading: loading, error, refetch }
+}
+
+interface AggregatedOrdersForRangeData {
+  aggregatedOrdersForRange: Array<{ date: string; mealType: string; items: Array<{ menuItemId: string; name: string; unit: string; quantity: number; personBreakdown: Array<{ userId: string; userName: string; quantity: number }> }> }>
+}
+export function useAggregatedOrdersForRange(startDate: string, endDate: string) {
+  const { data, loading, error, refetch } = useQuery<AggregatedOrdersForRangeData>(AGGREGATED_ORDERS_FOR_RANGE, {
+    variables: { startDate, endDate },
+    skip: !startDate || !endDate,
+    fetchPolicy: 'cache-and-network',
+  })
+  const aggregated = (data?.aggregatedOrdersForRange ?? []).map(toAggregatedOrder)
+  return { aggregated, isLoading: loading, error, refetch }
 }
 
 interface SettingsData { getSettings: { monthlyMealCap: number | null; deliveryCharge: number | null; updatedAt: string | null } }

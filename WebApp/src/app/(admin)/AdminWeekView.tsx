@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useApolloClient } from '@apollo/client/react'
 import {
   useConfirmedOrdersForRange,
+  useAggregatedOrdersForRange,
   useMenuItems,
   useSettings,
   useUpdateSettings,
@@ -57,11 +58,13 @@ const MEALS: { id: Meal; label: string; icon: string }[] = [
 type Meal = 'breakfast' | 'lunch' | 'dinner'
 
 type Row = { menuItemId: string; name: string; unit: string; qty: number; unitPrice: number; amount: number }
+type PendingItem = { menuItemId: string; name: string; unit: string; aggQty: number; confirmedQty: number }
 type DayData = {
   date: string
   meals: Record<Meal, Row[]>
   subtotals: Record<Meal, number>
   cancelled: Record<Meal, boolean>
+  pending: Record<Meal, PendingItem[]>
   mealsTotal: number
 }
 
@@ -77,6 +80,7 @@ export function AdminWeekView() {
   const client = useApolloClient()
 
   const { orders, isLoading: ordersLoading } = useConfirmedOrdersForRange(weekStart, weekEnd)
+  const { aggregated } = useAggregatedOrdersForRange(weekStart, weekEnd)
   const { items: menuItems, isLoading: menuLoading } = useMenuItems()
   const { settings, isLoading: settingsLoading } = useSettings()
   const { cancellations, isLoading: cancelLoading, refetch: refetchCancellations } = useMealCancellationsForRange(weekStart, weekEnd)
@@ -109,6 +113,18 @@ export function AdminWeekView() {
     for (const c of cancellations) s.add(`${c.date}|${c.mealType}`)
     return s
   }, [cancellations])
+
+  // Live user selections keyed by date|meal → (menuItemId → {name, unit, qty}).
+  const aggByKey = useMemo(() => {
+    const map = new Map<string, Map<string, { name: string; unit: string; qty: number }>>()
+    for (const a of aggregated) {
+      const key = `${a.date}|${a.mealType}`
+      const items = new Map<string, { name: string; unit: string; qty: number }>()
+      for (const it of a.items) items.set(it.menuItemId, { name: it.name, unit: it.unit, qty: it.quantity })
+      map.set(key, items)
+    }
+    return map
+  }, [aggregated])
 
   const vendorNotesByDate = useMemo(() => {
     const map: Record<string, { finalAmount: number | null; comment: string }> = {}
@@ -204,6 +220,7 @@ export function AdminWeekView() {
     return dates.map((date) => {
       const meals = { breakfast: [] as Row[], lunch: [] as Row[], dinner: [] as Row[] }
       const subtotals = { breakfast: 0, lunch: 0, dinner: 0 }
+      const pending: Record<Meal, PendingItem[]> = { breakfast: [], lunch: [], dinner: [] }
       const cancelled = {
         breakfast: cancelledSet.has(`${date}|breakfast`),
         lunch: cancelledSet.has(`${date}|lunch`),
@@ -211,18 +228,33 @@ export function AdminWeekView() {
       }
       for (const { id: meal } of MEALS) {
         const order = byKey.get(`${date}|${meal}`)
-        if (!order) continue
-        for (const it of order.items) {
-          const unitPrice = priceByMenuId[it.menuItemId] ?? 0
-          const amount = unitPrice * it.quantity
-          meals[meal].push({ menuItemId: it.menuItemId, name: it.name, unit: it.unit, qty: it.quantity, unitPrice, amount })
-          subtotals[meal] += amount
+        const confirmedQtys = new Map<string, number>()
+        if (order) {
+          for (const it of order.items) {
+            const unitPrice = priceByMenuId[it.menuItemId] ?? 0
+            const amount = unitPrice * it.quantity
+            meals[meal].push({ menuItemId: it.menuItemId, name: it.name, unit: it.unit, qty: it.quantity, unitPrice, amount })
+            subtotals[meal] += amount
+            confirmedQtys.set(it.menuItemId, it.quantity)
+          }
+        }
+        // Compare live user selections against what's confirmed. Any add/change
+        // (present in the aggregated demand but not yet matching a confirmed qty)
+        // is flagged as pending — i.e. not yet sent to the kitchen.
+        const agg = aggByKey.get(`${date}|${meal}`)
+        if (agg) {
+          for (const [menuItemId, info] of agg) {
+            const confirmedQty = confirmedQtys.get(menuItemId) ?? 0
+            if (info.qty !== confirmedQty) {
+              pending[meal].push({ menuItemId, name: info.name, unit: info.unit, aggQty: info.qty, confirmedQty })
+            }
+          }
         }
       }
       const mealsTotal = MEALS.reduce((s, { id: meal }) => s + (cancelled[meal] ? 0 : subtotals[meal]), 0)
-      return { date, meals, subtotals, cancelled, mealsTotal }
+      return { date, meals, subtotals, cancelled, pending, mealsTotal }
     })
-  }, [dates, orders, priceByMenuId, cancelledSet])
+  }, [dates, orders, priceByMenuId, cancelledSet, aggByKey])
 
   const handleConfirmWeek = async () => {
     if (writeBusy) return
@@ -285,7 +317,11 @@ export function AdminWeekView() {
   if (isLoading) return <Loader />
 
   const todayStr = toDateString(new Date())
-  const dayTotalOf = (d: DayData) => d.mealsTotal + (d.mealsTotal > 0 ? delivery : 0)
+  // Delivery is charged per active meal (has an order and not cancelled), so a
+  // cancelled/empty meal drops its share of the delivery fee.
+  const activeMealsOf = (d: DayData) => MEALS.filter(({ id }) => !d.cancelled[id] && d.subtotals[id] > 0).length
+  const deliveryOf = (d: DayData) => delivery * activeMealsOf(d)
+  const dayTotalOf = (d: DayData) => d.mealsTotal + deliveryOf(d)
   const weekTotal = week.reduce((sum, d) => sum + dayTotalOf(d), 0)
   const expenseTillNow = week.reduce((sum, d) => sum + (d.date <= todayStr ? dayTotalOf(d) : 0), 0)
 
@@ -296,7 +332,7 @@ export function AdminWeekView() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setSettingsOpen(!settingsOpen)}>
           <h3 style={{ margin: 0, fontSize: '0.95rem' }}>Settings</h3>
           <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-            Cap: {settings.monthlyMealCap != null ? `₹${settings.monthlyMealCap}/mo` : 'None'} · Delivery: {settings.deliveryCharge != null ? `₹${settings.deliveryCharge}` : 'None'}
+            Cap: {settings.monthlyMealCap != null ? `₹${settings.monthlyMealCap}/mo` : 'None'} · Delivery: {settings.deliveryCharge != null ? `₹${settings.deliveryCharge}/meal` : 'None'}
             {' '}{settingsOpen ? '▴' : '▾'}
           </span>
         </div>
@@ -325,10 +361,10 @@ export function AdminWeekView() {
             </div>
             {/* Delivery charge */}
             <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '0.75rem', background: 'var(--color-surface)' }}>
-              <div style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: '0.5rem' }}>Delivery Charge</div>
+              <div style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: '0.5rem' }}>Delivery Charge <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>(per meal)</span></div>
               {!deliveryEditing ? (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>{settings.deliveryCharge != null ? `₹${settings.deliveryCharge}` : 'No charge set'}</span>
+                  <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>{settings.deliveryCharge != null ? `₹${settings.deliveryCharge}/meal` : 'No charge set'}</span>
                   <Button size="sm" variant="outline" onClick={() => { setDeliveryInput(settings.deliveryCharge != null ? String(settings.deliveryCharge) : ''); setDeliveryEditing(true) }}>Edit</Button>
                 </div>
               ) : (
@@ -366,7 +402,7 @@ export function AdminWeekView() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
               <Button onClick={handleConfirmWeek} disabled={writeBusy} size="sm">
-                {weekPending ? (weekProgress || 'Confirming…') : 'Confirm week'}
+                {weekPending ? (weekProgress || 'Confirming…') : 'Send to Shefs…'}
               </Button>
             </div>
           </div>
@@ -410,10 +446,19 @@ export function AdminWeekView() {
                       const rows = d.meals[meal]
                       const isCancelled = d.cancelled[meal]
                       const isEditing = editingMeal?.date === d.date && editingMeal?.meal === meal
+                      const pendingItems = d.pending[meal]
+                      const hasPending = !isCancelled && pendingItems.length > 0
                       return (
-                        <div key={meal} style={{ border: '1px solid var(--color-border)', borderRadius: 10, background: 'var(--color-bg)', overflow: 'hidden', opacity: isCancelled ? 0.6 : 1 }}>
+                        <div key={meal} style={{ border: hasPending ? '1px solid var(--color-warning, #f59e0b)' : '1px solid var(--color-border)', borderRadius: 10, background: 'var(--color-bg)', overflow: 'hidden', opacity: isCancelled ? 0.6 : 1 }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', padding: '0.55rem 0.75rem', background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
-                            <span style={{ fontSize: '0.8125rem', fontWeight: 700, textDecoration: isCancelled ? 'line-through' : 'none' }}>{icon} {label}</span>
+                            <span style={{ fontSize: '0.8125rem', fontWeight: 700, textDecoration: isCancelled ? 'line-through' : 'none', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              {icon} {label}
+                              {hasPending && (
+                                <span title="Users changed their picks since the last send" style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-warning, #b45309)', background: 'rgba(245,158,11,0.16)', padding: '0.05rem 0.4rem', borderRadius: 999 }}>
+                                  ⏳ {pendingItems.length} pending
+                                </span>
+                              )}
+                            </span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                               {!isCancelled && !isEditing && (
                                 <button
@@ -519,6 +564,26 @@ export function AdminWeekView() {
                                   </div>
                                 </>
                               )}
+                              {!isEditing && hasPending && (
+                                <div style={{ padding: '0.5rem 0.75rem', borderTop: '1px solid var(--color-border)', background: 'rgba(245,158,11,0.07)' }}>
+                                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-warning, #b45309)', marginBottom: '0.35rem' }}>
+                                    Pending — not yet sent to Shefs
+                                  </div>
+                                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                    {pendingItems.map((p) => (
+                                      <li key={p.menuItemId} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', fontSize: '0.8125rem' }}>
+                                        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                                        <span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
+                                          {p.aggQty} {p.unit}
+                                          {p.confirmedQty > 0 && (
+                                            <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}> (sent: {p.confirmedQty})</span>
+                                          )}
+                                        </span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
                             </>
                           )}
                         </div>
@@ -528,7 +593,7 @@ export function AdminWeekView() {
 
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1.5rem', flexWrap: 'wrap', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid var(--color-border)', fontSize: '0.875rem' }}>
                     <span style={{ color: 'var(--color-text-muted)' }}>Meals <strong style={{ color: 'var(--color-text)' }}>{money(d.mealsTotal)}</strong></span>
-                    <span style={{ color: 'var(--color-text-muted)' }}>Delivery <strong style={{ color: 'var(--color-text)' }}>{delivery > 0 && d.mealsTotal > 0 ? money(delivery) : '—'}</strong></span>
+                    <span style={{ color: 'var(--color-text-muted)' }}>Delivery <strong style={{ color: 'var(--color-text)' }}>{deliveryOf(d) > 0 ? `${money(deliveryOf(d))} (${activeMealsOf(d)} × ${money(delivery)})` : '—'}</strong></span>
                     <span style={{ color: 'var(--color-text-muted)' }}>Day total <strong style={{ color: 'var(--color-primary)', fontSize: '1rem' }}>{money(dayTotal)}</strong></span>
                   </div>
 

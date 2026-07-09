@@ -23,6 +23,7 @@ export const resolvers = {
     myMealDoneForWeek: mealDone.myMealDoneForWeek,
     mealDoneStatus: mealDone.mealDoneStatus,
     aggregatedOrder: orders.aggregatedOrder,
+    aggregatedOrdersForRange: orders.aggregatedOrdersForRange,
     confirmedOrders: orders.confirmedOrders,
     confirmedOrdersForRange: orders.confirmedOrdersForRange,
     getSettings: settings.getSettings,
