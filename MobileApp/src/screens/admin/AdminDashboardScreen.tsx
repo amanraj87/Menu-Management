@@ -9,6 +9,7 @@ import {
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Screen } from '../../ui/Screen';
 import { Badge, Button, Card, Loader, SectionLabel } from '../../ui';
+import { Sheet } from '../../ui/Sheet';
 import { SignOutButton } from '../../ui/SignOutButton';
 import { gqlRequest } from '../../api/client';
 import {
@@ -19,10 +20,16 @@ import { useMenuItems, useUsers, useSettings } from '../../api/hooks';
 import { useFeedbacksForAdmin } from '../../api/hooks';
 import { useToast } from '../../context/ToastContext';
 import { colors, font, radius, spacing } from '../../theme';
-import { formatLong, todayISO, weekStart as getWeekStart, addDays } from '../../utils/date';
+import { formatLong, formatShort, todayISO, weekStart as getWeekStart, addDays } from '../../utils/date';
 import type { ConfirmedOrder } from '../../types';
 
 type Period = 'day' | 'week' | 'month' | 'custom';
+type ExpenseMode = 'week' | 'month';
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
 
 function getWeekEnd(ws: string): string {
   return addDays(ws, 6);
@@ -177,9 +184,10 @@ export function AdminDashboardScreen() {
   const menu = useMenuItems();
   const { settings, refetch: refetchSettings } = useSettings();
 
-  const [expensePeriod, setExpensePeriod] = useState<Period>('day');
-  const [expCustomStart, setExpCustomStart] = useState(today);
-  const [expCustomEnd, setExpCustomEnd] = useState(today);
+  const [expenseMode, setExpenseMode] = useState<ExpenseMode>('week');
+  const [expenseWeekStart, setExpenseWeekStart] = useState(() => getWeekStart(today));
+  const [expenseMonth, setExpenseMonth] = useState(() => today.slice(0, 7));
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [dishPeriod, setDishPeriod] = useState<Period>('day');
   const [dishCustomStart, setDishCustomStart] = useState(today);
   const [dishCustomEnd, setDishCustomEnd] = useState(today);
@@ -197,8 +205,39 @@ export function AdminDashboardScreen() {
     }
   }
 
-  const [expStart, expEnd] = getRange(expensePeriod, expCustomStart, expCustomEnd);
+  const weekOptions = useMemo(() => {
+    const arr: Array<{ start: string; end: string; label: string }> = [];
+    const cur = getWeekStart(today);
+    for (let i = 0; i < 12; i++) {
+      const start = addDays(cur, -7 * i);
+      const end = getWeekEnd(start);
+      arr.push({ start, end, label: `${formatShort(start)} – ${formatShort(end)}${i === 0 ? ' (This week)' : ''}` });
+    }
+    return arr;
+  }, [today]);
+
+  const monthOptions = useMemo(() => {
+    const arr: Array<{ value: string; label: string }> = [];
+    const y = parseInt(today.slice(0, 4), 10);
+    const m = parseInt(today.slice(5, 7), 10);
+    for (let i = 0; i < 12; i++) {
+      let yy = y;
+      let mm = m - i;
+      while (mm <= 0) { mm += 12; yy -= 1; }
+      const value = `${yy}-${String(mm).padStart(2, '0')}`;
+      arr.push({ value, label: `${MONTH_NAMES[mm - 1]} ${yy}${i === 0 ? ' (This month)' : ''}` });
+    }
+    return arr;
+  }, [today]);
+
+  const [expStart, expEnd] = expenseMode === 'week'
+    ? [expenseWeekStart, getWeekEnd(expenseWeekStart)]
+    : [`${expenseMonth}-01`, getMonthEnd(`${expenseMonth}-01`)];
   const [dshStart, dshEnd] = getRange(dishPeriod, dishCustomStart, dishCustomEnd);
+
+  const selectedExpenseLabel = expenseMode === 'week'
+    ? (weekOptions.find(w => w.start === expenseWeekStart)?.label ?? '')
+    : (monthOptions.find(m => m.value === expenseMonth)?.label ?? '');
 
   const [expenseOrders, setExpenseOrders] = useState<ConfirmedOrder[]>([]);
   const [dishOrders, setDishOrders] = useState<ConfirmedOrder[]>([]);
@@ -347,14 +386,22 @@ export function AdminDashboardScreen() {
           {/* Expenses */}
           <SectionLabel>Expenses</SectionLabel>
           <Card>
-            <PeriodSelector
-              value={expensePeriod}
-              onChange={setExpensePeriod}
-              customStart={expCustomStart}
-              customEnd={expCustomEnd}
-              onCustomStartChange={setExpCustomStart}
-              onCustomEndChange={setExpCustomEnd}
-            />
+            <View style={styles.modeRow}>
+              {(['week', 'month'] as ExpenseMode[]).map(mode => (
+                <Pressable
+                  key={mode}
+                  onPress={() => setExpenseMode(mode)}
+                  style={[styles.modePill, expenseMode === mode && styles.modePillActive]}>
+                  <Text style={[styles.modePillText, expenseMode === mode && styles.modePillTextActive]}>
+                    {mode === 'week' ? 'Week' : 'Month'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable style={styles.dropdown} onPress={() => setPickerOpen(true)}>
+              <Text style={styles.dropdownText}>{selectedExpenseLabel}</Text>
+              <Text style={styles.dropdownChevron}>▾</Text>
+            </Pressable>
             <Text style={styles.bigMoney}>₹{Math.round(expenseData.total)}</Text>
             <Text style={styles.statLabel}>
               {expenseOrders.length} confirmed meal{expenseOrders.length !== 1 ? 's' : ''}
@@ -400,6 +447,35 @@ export function AdminDashboardScreen() {
           <Text style={styles.footerNote}>
             Based on confirmed orders and menu item prices.
           </Text>
+
+          <Sheet
+            visible={pickerOpen}
+            onClose={() => setPickerOpen(false)}
+            title={expenseMode === 'week' ? 'Select week' : 'Select month'}>
+            {expenseMode === 'week'
+              ? weekOptions.map(w => (
+                  <Pressable
+                    key={w.start}
+                    onPress={() => { setExpenseWeekStart(w.start); setPickerOpen(false); }}
+                    style={styles.optionRow}>
+                    <Text style={[styles.optionText, w.start === expenseWeekStart && styles.optionTextActive]}>
+                      {w.label}
+                    </Text>
+                    {w.start === expenseWeekStart && <Text style={styles.optionCheck}>✓</Text>}
+                  </Pressable>
+                ))
+              : monthOptions.map(m => (
+                  <Pressable
+                    key={m.value}
+                    onPress={() => { setExpenseMonth(m.value); setPickerOpen(false); }}
+                    style={styles.optionRow}>
+                    <Text style={[styles.optionText, m.value === expenseMonth && styles.optionTextActive]}>
+                      {m.label}
+                    </Text>
+                    {m.value === expenseMonth && <Text style={styles.optionCheck}>✓</Text>}
+                  </Pressable>
+                ))}
+          </Sheet>
         </>
       )}
     </Screen>
@@ -428,6 +504,43 @@ const styles = StyleSheet.create({
 
   bigMoney: { color: colors.text, fontSize: 28, fontWeight: '900' },
   statLabel: { color: colors.textMuted, fontSize: font.small, marginTop: 4, marginBottom: spacing.sm },
+
+  modeRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  modePill: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: 'transparent',
+  },
+  modePillActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  modePillText: { color: colors.text, fontSize: font.small, fontWeight: '600' },
+  modePillTextActive: { color: '#fff' },
+  dropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: spacing.md,
+  },
+  dropdownText: { color: colors.text, fontSize: font.body, fontWeight: '600' },
+  dropdownChevron: { color: colors.textMuted, fontSize: font.body },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  optionText: { color: colors.text, fontSize: font.body },
+  optionTextActive: { color: colors.primary, fontWeight: '700' },
+  optionCheck: { color: colors.primary, fontSize: font.body, fontWeight: '700' },
 
   personList: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: spacing.sm, paddingTop: spacing.sm },
   personRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },

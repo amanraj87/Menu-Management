@@ -34,7 +34,19 @@ function getMonthEnd(dateStr: string): string {
   return `${dateStr.slice(0, 8)}${String(lastDay).padStart(2, '0')}`
 }
 
+function addDays(dateStr: string, n: number): string {
+  const d = new Date(dateStr + 'T12:00:00')
+  d.setDate(d.getDate() + n)
+  return toDateString(d)
+}
+
+function prettyDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00')
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
 type Period = 'day' | 'week' | 'month' | 'custom'
+type ExpenseMode = 'week' | 'month'
 
 function computeExpense(
   orders: ConfirmedOrder[],
@@ -89,9 +101,9 @@ export function AdminDashboard() {
   const today = toDateString(new Date())
   const toast = useToastStore()
 
-  const [expensePeriod, setExpensePeriod] = useState<Period>('day')
-  const [expenseCustomStart, setExpenseCustomStart] = useState(today)
-  const [expenseCustomEnd, setExpenseCustomEnd] = useState(today)
+  const [expenseMode, setExpenseMode] = useState<ExpenseMode>('week')
+  const [expenseWeekStart, setExpenseWeekStart] = useState(() => getWeekStart(today))
+  const [expenseMonth, setExpenseMonth] = useState(() => today.slice(0, 7))
 
   const [dishPeriod, setDishPeriod] = useState<Period>('day')
   const [dishCustomStart, setDishCustomStart] = useState(today)
@@ -123,7 +135,37 @@ export function AdminDashboard() {
     }
   }
 
-  const [expStart, expEnd] = getRange(expensePeriod, expenseCustomStart, expenseCustomEnd)
+  const weekOptions = useMemo(() => {
+    const arr: Array<{ start: string; end: string; label: string }> = []
+    const curWeekStart = getWeekStart(today)
+    for (let i = 0; i < 12; i++) {
+      const start = addDays(curWeekStart, -7 * i)
+      const end = getWeekEnd(start)
+      arr.push({ start, end, label: `${prettyDate(start)} – ${prettyDate(end)}${i === 0 ? ' (This week)' : ''}` })
+    }
+    return arr
+  }, [today])
+
+  const monthOptions = useMemo(() => {
+    const arr: Array<{ value: string; start: string; end: string; label: string }> = []
+    const y = parseInt(today.slice(0, 4), 10)
+    const m = parseInt(today.slice(5, 7), 10)
+    for (let i = 0; i < 12; i++) {
+      let yy = y
+      let mm = m - i
+      while (mm <= 0) { mm += 12; yy -= 1 }
+      const value = `${yy}-${String(mm).padStart(2, '0')}`
+      const start = `${value}-01`
+      const end = getMonthEnd(start)
+      const label = new Date(yy, mm - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) + (i === 0 ? ' (This month)' : '')
+      arr.push({ value, start, end, label })
+    }
+    return arr
+  }, [today])
+
+  const [expStart, expEnd] = expenseMode === 'week'
+    ? [expenseWeekStart, getWeekEnd(expenseWeekStart)]
+    : [`${expenseMonth}-01`, getMonthEnd(`${expenseMonth}-01`)]
   const [dshStart, dshEnd] = getRange(dishPeriod, dishCustomStart, dishCustomEnd)
 
   const { orders: expenseOrders, isLoading: expenseOrdersLoading } = useConfirmedOrdersForRange(expStart, expEnd)
@@ -272,11 +314,50 @@ export function AdminDashboard() {
         {/* Expenses */}
         <section style={{ marginBottom: '1.5rem' }}>
           <h3>Expenses</h3>
-          <PeriodSelector
-            value={expensePeriod} onChange={setExpensePeriod}
-            customStart={expenseCustomStart} customEnd={expenseCustomEnd}
-            onCustomStartChange={setExpenseCustomStart} onCustomEndChange={setExpenseCustomEnd}
-          />
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              {(['week', 'month'] as ExpenseMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setExpenseMode(mode)}
+                  style={{
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid',
+                    borderColor: expenseMode === mode ? 'var(--color-primary)' : 'var(--color-border)',
+                    background: expenseMode === mode ? 'var(--color-primary)' : 'transparent',
+                    color: expenseMode === mode ? '#fff' : 'var(--color-text)',
+                    cursor: 'pointer',
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                  }}
+                >
+                  {mode === 'week' ? 'Week' : 'Month'}
+                </button>
+              ))}
+            </div>
+            {expenseMode === 'week' ? (
+              <select
+                value={expenseWeekStart}
+                onChange={(e) => setExpenseWeekStart(e.target.value)}
+                style={{ padding: '0.35rem 0.5rem', borderRadius: '0.375rem', border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', fontSize: '0.8125rem' }}
+              >
+                {weekOptions.map((w) => (
+                  <option key={w.start} value={w.start}>{w.label}</option>
+                ))}
+              </select>
+            ) : (
+              <select
+                value={expenseMonth}
+                onChange={(e) => setExpenseMonth(e.target.value)}
+                style={{ padding: '0.35rem 0.5rem', borderRadius: '0.375rem', border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', fontSize: '0.8125rem' }}
+              >
+                {monthOptions.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            )}
+          </div>
           <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem', background: 'var(--color-surface)' }}>
             {expenseOrdersLoading ? (
               <p style={{ margin: 0, color: 'var(--color-text-muted)' }}>Loading…</p>
