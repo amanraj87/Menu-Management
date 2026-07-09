@@ -29,6 +29,12 @@ function formatDisplayDate(dateStr: string) {
   return d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 }
 
+/** Saturday (6) or Sunday (0) — time to plan the upcoming week. */
+function isWeekend(dateStr: string): boolean {
+  const day = new Date(dateStr + 'T12:00:00').getDay()
+  return day === 0 || day === 6
+}
+
 export function PersonTodayView() {
   const today = toDateString(new Date())
   const startDate = getWeekStart(today)
@@ -87,6 +93,20 @@ export function PersonTodayView() {
   }
 
   return (
+    <>
+      {isWeekend(today) && (
+        <Card className="content-card" style={{ marginBottom: '1rem', borderColor: 'var(--color-warning, #f59e0b)', background: 'rgba(245,158,11,0.08)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '1.4rem' }}>🗓️</span>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <div style={{ fontWeight: 700, marginBottom: '0.15rem' }}>It's the weekend — plan next week!</div>
+              <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
+                Head to <Link to="/person/week">My week</Link> and use “Import from last week” to set your meals for the coming week.
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
     <Card className="content-card" title="Today's meals">
       <p className="content-subtitle" style={{ marginBottom: '1.25rem' }}>
         {formatDisplayDate(today)}
@@ -143,5 +163,6 @@ export function PersonTodayView() {
         To change your choices, go to <Link to="/person/week">My week</Link>.
       </p>
     </Card>
+    </>
   )
 }
