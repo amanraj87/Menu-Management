@@ -242,8 +242,8 @@ export function AdminDashboardScreen() {
   const handleSaveCap = async (value: number | null) => {
     setCapSaving(true);
     try {
-      await gqlRequest(UPDATE_SETTINGS, { weeklyMealCap: value });
-      toast.show('Weekly cap updated.', 'success');
+      await gqlRequest(UPDATE_SETTINGS, { monthlyMealCap: value });
+      toast.show('Monthly cap updated.', 'success');
       setCapEditing(false);
       refetchSettings();
     } catch (e) {
@@ -287,24 +287,24 @@ export function AdminDashboardScreen() {
             </View>
           </Card>
 
-          {/* Weekly Meal Cap */}
-          <SectionLabel>Weekly Meal Price Cap</SectionLabel>
+          {/* Monthly Meal Cap */}
+          <SectionLabel>Monthly Meal Price Cap</SectionLabel>
           <Card>
             {!capEditing ? (
               <View style={styles.capRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.capValue}>
-                    {settings.weeklyMealCap != null ? `₹${settings.weeklyMealCap}` : 'No cap set'}
+                    {settings.monthlyMealCap != null ? `₹${settings.monthlyMealCap}` : 'No cap set'}
                   </Text>
                   <Text style={styles.capSub}>
-                    {settings.weeklyMealCap != null ? 'Per user, per week' : 'Users can order unlimited meals'}
+                    {settings.monthlyMealCap != null ? 'Per user, per month' : 'Users can order unlimited meals'}
                   </Text>
                 </View>
                 <Button
                   title="Edit"
                   variant="outline"
                   onPress={() => {
-                    setCapInput(settings.weeklyMealCap != null ? String(settings.weeklyMealCap) : '');
+                    setCapInput(settings.monthlyMealCap != null ? String(settings.monthlyMealCap) : '');
                     setCapEditing(true);
                   }}
                 />
@@ -330,7 +330,7 @@ export function AdminDashboardScreen() {
                   />
                   <Button title="Cancel" variant="outline" onPress={() => setCapEditing(false)} />
                 </View>
-                {settings.weeklyMealCap != null && (
+                {settings.monthlyMealCap != null && (
                   <Button
                     title="Remove cap"
                     variant="danger"

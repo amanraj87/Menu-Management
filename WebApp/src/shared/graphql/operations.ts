@@ -351,18 +351,24 @@ export const CONFIRMED_ORDERS_FOR_RANGE = gql`
 export const GET_SETTINGS = gql`
   query GetSettings {
     getSettings {
-      weeklyMealCap
+      monthlyMealCap
       updatedAt
     }
   }
 `
 
 export const UPDATE_SETTINGS = gql`
-  mutation UpdateSettings($weeklyMealCap: Float) {
-    updateSettings(weeklyMealCap: $weeklyMealCap) {
-      weeklyMealCap
+  mutation UpdateSettings($monthlyMealCap: Float) {
+    updateSettings(monthlyMealCap: $monthlyMealCap) {
+      monthlyMealCap
       updatedAt
     }
+  }
+`
+
+export const WEEKLY_EXPENSE = gql`
+  query WeeklyExpense($startDate: String!) {
+    weeklyExpense(startDate: $startDate)
   }
 `
 

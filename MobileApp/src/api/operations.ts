@@ -189,13 +189,19 @@ export const CONFIRMED_ORDERS_FOR_RANGE = `
 
 export const GET_SETTINGS = `
   query GetSettings {
-    getSettings { weeklyMealCap updatedAt }
+    getSettings { monthlyMealCap updatedAt }
   }
 `;
 
 export const UPDATE_SETTINGS = `
-  mutation UpdateSettings($weeklyMealCap: Float) {
-    updateSettings(weeklyMealCap: $weeklyMealCap) { weeklyMealCap updatedAt }
+  mutation UpdateSettings($monthlyMealCap: Float) {
+    updateSettings(monthlyMealCap: $monthlyMealCap) { monthlyMealCap updatedAt }
+  }
+`;
+
+export const WEEKLY_EXPENSE = `
+  query WeeklyExpense($startDate: String!) {
+    weeklyExpense(startDate: $startDate)
   }
 `;
 

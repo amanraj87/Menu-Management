@@ -5,7 +5,7 @@ import type { ContextUser, SettingsDoc } from '../types.js'
 
 function toSettings(doc: SettingsDoc | null): Record<string, unknown> {
   return {
-    weeklyMealCap: doc?.weeklyMealCap ?? null,
+    monthlyMealCap: doc?.monthlyMealCap ?? null,
     updatedAt: doc?.updatedAt?.toISOString() ?? null,
   }
 }
@@ -24,7 +24,7 @@ export async function getSettings(
 
 export async function updateSettings(
   _: unknown,
-  args: { weeklyMealCap: number | null },
+  args: { monthlyMealCap: number | null },
   context: { user?: ContextUser }
 ): Promise<Record<string, unknown>> {
   const user = context.user
@@ -32,7 +32,7 @@ export async function updateSettings(
   const db = getDb()
   const result = await db.collection(COLLECTIONS.settings).findOneAndUpdate(
     {},
-    { $set: { weeklyMealCap: args.weeklyMealCap, updatedAt: new Date(), updatedBy: new ObjectId(user.userId) } },
+    { $set: { monthlyMealCap: args.monthlyMealCap, updatedAt: new Date(), updatedBy: new ObjectId(user.userId) } },
     { returnDocument: 'after', upsert: true }
   ) as SettingsDoc | null
   return toSettings(result)

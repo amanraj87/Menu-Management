@@ -30,6 +30,7 @@ import {
   CONFIRMED_ORDERS_FOR_RANGE,
   GET_SETTINGS,
   UPDATE_SETTINGS,
+  WEEKLY_EXPENSE,
 } from './operations'
 import { toUser, toMenuItem, toSelection, toAggregatedOrder, toConfirmedOrder, toFeedback } from './mappers'
 import type { MealType, UserRole } from '@/shared/types'
@@ -380,10 +381,19 @@ export function useConfirmedOrdersForRange(startDate: string, endDate: string) {
   return { orders, isLoading: loading, error }
 }
 
-interface SettingsData { getSettings: { weeklyMealCap: number | null; updatedAt: string | null } }
+interface SettingsData { getSettings: { monthlyMealCap: number | null; updatedAt: string | null } }
 export function useSettings() {
   const { data, loading, error, refetch } = useQuery<SettingsData>(GET_SETTINGS)
-  return { settings: data?.getSettings ?? { weeklyMealCap: null, updatedAt: null }, isLoading: loading, error, refetch }
+  return { settings: data?.getSettings ?? { monthlyMealCap: null, updatedAt: null }, isLoading: loading, error, refetch }
+}
+
+interface WeeklyExpenseData { weeklyExpense: number }
+export function useWeeklyExpense(startDate: string) {
+  const { data, loading, error, refetch } = useQuery<WeeklyExpenseData>(WEEKLY_EXPENSE, {
+    variables: { startDate },
+    skip: !startDate,
+  })
+  return { weeklyExpense: data?.weeklyExpense ?? 0, isLoading: loading, error, refetch }
 }
 
 export function useUpdateSettings(onSuccess?: () => void, onError?: (e: Error) => void) {
@@ -396,7 +406,7 @@ export function useUpdateSettings(onSuccess?: () => void, onError?: (e: Error) =
     onError: (e: Error) => onError?.(e),
   })
   return {
-    updateSettings: (weeklyMealCap: number | null) => mutate({ variables: { weeklyMealCap } }),
+    updateSettings: (monthlyMealCap: number | null) => mutate({ variables: { monthlyMealCap } }),
     isPending: result.loading,
     error: result.error,
   }

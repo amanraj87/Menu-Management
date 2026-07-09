@@ -24,6 +24,7 @@ export const resolvers = {
     confirmedOrders: orders.confirmedOrders,
     confirmedOrdersForRange: orders.confirmedOrdersForRange,
     getSettings: settings.getSettings,
+    weeklyExpense: selections.weeklyExpense,
     feedbacksForAdmin: feedback.feedbacksForAdmin,
     confirmedFeedbacks: feedback.confirmedFeedbacks,
   },

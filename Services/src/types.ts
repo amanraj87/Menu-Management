@@ -87,7 +87,7 @@ export interface MealDoneDoc {
 
 export interface SettingsDoc {
   _id: ObjectId
-  weeklyMealCap: number | null
+  monthlyMealCap: number | null
   updatedAt: Date
   updatedBy: ObjectId
 }

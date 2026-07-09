@@ -61,6 +61,44 @@ export async function mySelectionsForWeek(
   return results
 }
 
+export async function weeklyExpense(
+  _: unknown,
+  args: { startDate: string },
+  context: { user?: ContextUser }
+): Promise<number> {
+  const user = context.user
+  if (!user || user.role !== 'admin') throw new Error('Unauthorized: admin role required')
+  const db = getDb()
+  const start = new Date(args.startDate + 'T00:00:00')
+  const weekDates: string[] = []
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start)
+    d.setDate(start.getDate() + i)
+    weekDates.push(d.toISOString().slice(0, 10))
+  }
+
+  const selections = await db.collection(COLLECTIONS.selections).find({
+    date: { $in: weekDates },
+  }).toArray() as SelectionDoc[]
+
+  const allMenuIds = new Set<string>()
+  for (const sel of selections) {
+    for (const it of sel.items) allMenuIds.add(it.menuItemId.toString())
+  }
+  const menuItems = allMenuIds.size > 0
+    ? await db.collection(COLLECTIONS.menu_items).find({ _id: { $in: Array.from(allMenuIds).map(id => new ObjectId(id)) } }).toArray() as MenuItemDoc[]
+    : []
+  const priceMap = new Map(menuItems.map(m => [m._id.toString(), m.pricePerUnit ?? 0]))
+
+  let total = 0
+  for (const sel of selections) {
+    for (const it of sel.items) {
+      total += (priceMap.get(it.menuItemId.toString()) ?? 0) * it.quantity
+    }
+  }
+  return total
+}
+
 export async function putSelection(
   _: unknown,
   args: { input: { date: string; mealType: MealType; items: { menuItemId: string; quantity: number }[] } },
@@ -71,28 +109,18 @@ export async function putSelection(
   const db = getDb()
 
   const settings = await db.collection(COLLECTIONS.settings).findOne({}) as SettingsDoc | null
-  const cap = settings?.weeklyMealCap ?? null
+  const cap = settings?.monthlyMealCap ?? null
   if (cap != null && cap > 0) {
     const inputDate = args.input.date
-    const d = new Date(inputDate + 'T12:00:00')
-    const day = d.getDay()
-    const diff = day === 0 ? -6 : 1 - day
-    const ws = new Date(d)
-    ws.setDate(d.getDate() + diff)
-    const weekDates: string[] = []
-    for (let i = 0; i < 7; i++) {
-      const wd = new Date(ws)
-      wd.setDate(ws.getDate() + i)
-      weekDates.push(wd.toISOString().slice(0, 10))
-    }
+    const monthPrefix = inputDate.slice(0, 7) // YYYY-MM
 
-    const weekSelections = await db.collection(COLLECTIONS.selections).find({
+    const monthSelections = await db.collection(COLLECTIONS.selections).find({
       userId: new ObjectId(user.userId),
-      date: { $in: weekDates },
+      date: { $regex: `^${monthPrefix}` },
     }).toArray() as SelectionDoc[]
 
     const allMenuIds = new Set<string>()
-    for (const sel of weekSelections) {
+    for (const sel of monthSelections) {
       for (const it of sel.items) allMenuIds.add(it.menuItemId.toString())
     }
     for (const it of args.input.items) allMenuIds.add(it.menuItemId)
@@ -101,12 +129,12 @@ export async function putSelection(
       : []
     const priceMap = new Map(menuItems.map(m => [m._id.toString(), m.pricePerUnit ?? 0]))
 
-    let weeklyTotal = 0
-    for (const sel of weekSelections) {
+    let monthlyTotal = 0
+    for (const sel of monthSelections) {
       const isSameSlot = sel.date === inputDate && sel.mealType === args.input.mealType
       if (isSameSlot) continue
       for (const it of sel.items) {
-        weeklyTotal += (priceMap.get(it.menuItemId.toString()) ?? 0) * it.quantity
+        monthlyTotal += (priceMap.get(it.menuItemId.toString()) ?? 0) * it.quantity
       }
     }
 
@@ -115,8 +143,8 @@ export async function putSelection(
       newSlotCost += (priceMap.get(it.menuItemId) ?? 0) * it.quantity
     }
 
-    if (weeklyTotal + newSlotCost > cap) {
-      throw new Error(`Weekly meal cap exceeded. Your weekly total would be ₹${Math.round(weeklyTotal + newSlotCost)} which exceeds the cap of ₹${Math.round(cap)}.`)
+    if (monthlyTotal + newSlotCost > cap) {
+      throw new Error(`Monthly meal cap exceeded. Your monthly total would be ₹${Math.round(monthlyTotal + newSlotCost)} which exceeds the cap of ₹${Math.round(cap)}.`)
     }
   }
 

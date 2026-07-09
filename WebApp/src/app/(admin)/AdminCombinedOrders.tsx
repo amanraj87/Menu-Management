@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useApolloClient } from '@apollo/client/react'
 import { Card, Button, Loader, Table, Thead, Tbody, Tr, Th, Td } from '@/shared/ui'
 import type { MealType } from '@/shared/types'
-import { useAggregatedOrder, useConfirmOrderWithItems, useMenuItems, useMealDoneStatus } from '@/shared/graphql/hooks'
+import { useAggregatedOrder, useConfirmOrderWithItems, useMenuItems, useMealDoneStatus, useWeeklyExpense } from '@/shared/graphql/hooks'
 import { AGGREGATED_ORDER, CONFIRM_ORDER_WITH_ITEMS, CONFIRMED_ORDERS } from '@/shared/graphql/operations'
 import { useToastStore } from '@/shared/stores/toastStore'
 
@@ -57,6 +57,7 @@ export function AdminCombinedOrders() {
   const [weekPending, setWeekPending] = useState(false)
   const [weekProgress, setWeekProgress] = useState('')
 
+  const { weeklyExpense, isLoading: weeklyExpenseLoading } = useWeeklyExpense(weekStart)
   const { aggregated, isLoading } = useAggregatedOrder(date, meal)
   const { items: menuItemsForMeal } = useMenuItems(meal)
   const { doneUsers } = useMealDoneStatus(date, meal)
@@ -213,6 +214,9 @@ export function AdminCombinedOrders() {
           <div style={{ flex: 1, minWidth: 180 }}>
             <span className="content-subtitle" style={{ display: 'block' }}>
               {prettyDay(weekStart)} – {prettyDay(weekEnd)}
+            </span>
+            <span style={{ display: 'block', color: 'var(--color-primary)', fontWeight: 700 }}>
+              Week expense (all users): {weeklyExpenseLoading ? '…' : `₹${weeklyExpense.toFixed(2).replace(/\.00$/, '')}`}
             </span>
             {weekProgress && (
               <span className="content-subtitle" style={{ display: 'block' }}>{weekProgress}</span>

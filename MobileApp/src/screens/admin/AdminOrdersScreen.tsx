@@ -13,7 +13,7 @@ import {
 } from '../../ui';
 import { Sheet } from '../../ui/Sheet';
 import { SignOutButton } from '../../ui/SignOutButton';
-import { useAggregatedOrder, useMenuItems, useMealDoneStatus } from '../../api/hooks';
+import { useAggregatedOrder, useMenuItems, useMealDoneStatus, useWeeklyExpense } from '../../api/hooks';
 import { gqlRequest } from '../../api/client';
 import { AGGREGATED_ORDER, CONFIRM_ORDER_WITH_ITEMS } from '../../api/operations';
 import { useToast } from '../../context/ToastContext';
@@ -46,6 +46,7 @@ export function AdminOrdersScreen() {
   const { aggregated, loading, refetch } = useAggregatedOrder(date, meal);
   const menu = useMenuItems(meal);
   const { doneUsers, refetch: refetchDone } = useMealDoneStatus(date, meal);
+  const { weeklyExpense, loading: weeklyExpenseLoading } = useWeeklyExpense(wkStart);
 
   useEffect(() => {
     setItems(
@@ -194,6 +195,9 @@ export function AdminOrdersScreen() {
             ) : (
               <Text style={styles.todayBadge}>Mon–Sun</Text>
             )}
+            <Text style={styles.weekExpense}>
+              Week expense: {weeklyExpenseLoading ? '…' : `₹${weeklyExpense.toFixed(2).replace(/\.00$/, '')}`}
+            </Text>
           </View>
           <Pressable
             style={styles.navBtn}
@@ -449,6 +453,7 @@ const styles = StyleSheet.create({
   dateLabel: { color: colors.text, fontSize: font.body, fontWeight: '700' },
   todayLink: { color: colors.primary, fontSize: font.tiny, marginTop: 2 },
   todayBadge: { color: colors.textFaint, fontSize: font.tiny, marginTop: 2 },
+  weekExpense: { color: colors.primary, fontSize: font.small, fontWeight: '700', marginTop: 2 },
 
   itemBlock: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   itemBorder: { borderTopWidth: 1, borderTopColor: colors.border },

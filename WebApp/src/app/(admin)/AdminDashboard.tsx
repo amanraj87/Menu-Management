@@ -105,7 +105,7 @@ export function AdminDashboard() {
   const { items: menuItems, isLoading: menuLoading } = useMenuItems()
   const { settings, isLoading: settingsLoading } = useSettings()
   const { updateSettings, isPending: settingsPending } = useUpdateSettings(
-    () => { toast.add('Weekly cap updated.', 'success'); setCapEditing(false) },
+    () => { toast.add('Monthly cap updated.', 'success'); setCapEditing(false) },
     (e) => toast.add(e.message, 'error')
   )
 
@@ -225,21 +225,21 @@ export function AdminDashboard() {
           </ul>
         </section>
 
-        {/* Weekly Meal Cap */}
+        {/* Monthly Meal Cap */}
         <section style={{ marginBottom: '1.5rem' }}>
-          <h3>Weekly Meal Price Cap</h3>
+          <h3>Monthly Meal Price Cap</h3>
           <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem', background: 'var(--color-surface)' }}>
             {!capEditing ? (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <p style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>
-                    {settings.weeklyMealCap != null ? `₹${settings.weeklyMealCap}` : 'No cap set'}
+                    {settings.monthlyMealCap != null ? `₹${settings.monthlyMealCap}` : 'No cap set'}
                   </p>
                   <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
-                    {settings.weeklyMealCap != null ? 'Per user, per week' : 'Users can order unlimited meals'}
+                    {settings.monthlyMealCap != null ? 'Per user, per month' : 'Users can order unlimited meals'}
                   </p>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => { setCapInput(settings.weeklyMealCap != null ? String(settings.weeklyMealCap) : ''); setCapEditing(true) }}>
+                <Button size="sm" variant="outline" onClick={() => { setCapInput(settings.monthlyMealCap != null ? String(settings.monthlyMealCap) : ''); setCapEditing(true) }}>
                   Edit
                 </Button>
               </div>
@@ -259,7 +259,7 @@ export function AdminDashboard() {
                   {settingsPending ? 'Saving…' : 'Save'}
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => setCapEditing(false)}>Cancel</Button>
-                {settings.weeklyMealCap != null && (
+                {settings.monthlyMealCap != null && (
                   <Button size="sm" variant="danger" onClick={() => updateSettings(null)} disabled={settingsPending}>
                     Remove cap
                   </Button>
