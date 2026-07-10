@@ -57,8 +57,9 @@ const MEALS: { id: Meal; label: string; icon: string }[] = [
 ]
 type Meal = 'breakfast' | 'lunch' | 'dinner'
 
-type Row = { menuItemId: string; name: string; unit: string; qty: number; unitPrice: number; amount: number }
-type PendingItem = { menuItemId: string; name: string; unit: string; aggQty: number; confirmedQty: number }
+type PersonShare = { userId: string; userName: string; quantity: number }
+type Row = { menuItemId: string; name: string; unit: string; qty: number; unitPrice: number; amount: number; personBreakdown: PersonShare[] }
+type PendingItem = { menuItemId: string; name: string; unit: string; aggQty: number; confirmedQty: number; personBreakdown: PersonShare[] }
 type DayData = {
   date: string
   meals: Record<Meal, Row[]>
@@ -66,6 +67,39 @@ type DayData = {
   cancelled: Record<Meal, boolean>
   pending: Record<Meal, PendingItem[]>
   mealsTotal: number
+}
+
+/** Collapsible "who chose this" list, grouped by quantity (same qty on one line). */
+function WhoChose({ breakdown }: { breakdown: PersonShare[] }) {
+  const [open, setOpen] = useState(false)
+  if (breakdown.length === 0) return null
+  const byQty = new Map<number, string[]>()
+  for (const p of breakdown) {
+    if (!byQty.has(p.quantity)) byQty.set(p.quantity, [])
+    byQty.get(p.quantity)!.push(p.userName)
+  }
+  const groups = Array.from(byQty.entries()).sort((a, b) => b[0] - a[0])
+  const total = breakdown.length
+  return (
+    <div style={{ marginTop: '0.15rem' }}>
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(o => !o) }}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '0.7rem', color: 'var(--color-text-muted)' }}
+      >
+        👤 {total} {total === 1 ? 'person' : 'people'}
+        <span style={{ display: 'inline-block', transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }}>▾</span>
+      </button>
+      {open && (
+        <div style={{ marginTop: '0.15rem', display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+          {groups.map(([qty, names]) => (
+            <div key={qty} style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>
+              <strong style={{ color: 'var(--color-text)' }}>{qty}×</strong> {names.join(', ')}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function isTodayStr(dateStr: string): boolean {
@@ -116,11 +150,11 @@ export function AdminWeekView() {
 
   // Live user selections keyed by date|meal → (menuItemId → {name, unit, qty}).
   const aggByKey = useMemo(() => {
-    const map = new Map<string, Map<string, { name: string; unit: string; qty: number }>>()
+    const map = new Map<string, Map<string, { name: string; unit: string; qty: number; personBreakdown: PersonShare[] }>>()
     for (const a of aggregated) {
       const key = `${a.date}|${a.mealType}`
-      const items = new Map<string, { name: string; unit: string; qty: number }>()
-      for (const it of a.items) items.set(it.menuItemId, { name: it.name, unit: it.unit, qty: it.quantity })
+      const items = new Map<string, { name: string; unit: string; qty: number; personBreakdown: PersonShare[] }>()
+      for (const it of a.items) items.set(it.menuItemId, { name: it.name, unit: it.unit, qty: it.quantity, personBreakdown: it.personBreakdown ?? [] })
       map.set(key, items)
     }
     return map
@@ -233,7 +267,7 @@ export function AdminWeekView() {
           for (const it of order.items) {
             const unitPrice = priceByMenuId[it.menuItemId] ?? 0
             const amount = unitPrice * it.quantity
-            meals[meal].push({ menuItemId: it.menuItemId, name: it.name, unit: it.unit, qty: it.quantity, unitPrice, amount })
+            meals[meal].push({ menuItemId: it.menuItemId, name: it.name, unit: it.unit, qty: it.quantity, unitPrice, amount, personBreakdown: it.personBreakdown ?? [] })
             subtotals[meal] += amount
             confirmedQtys.set(it.menuItemId, it.quantity)
           }
@@ -246,7 +280,7 @@ export function AdminWeekView() {
           for (const [menuItemId, info] of agg) {
             const confirmedQty = confirmedQtys.get(menuItemId) ?? 0
             if (info.qty !== confirmedQty) {
-              pending[meal].push({ menuItemId, name: info.name, unit: info.unit, aggQty: info.qty, confirmedQty })
+              pending[meal].push({ menuItemId, name: info.name, unit: info.unit, aggQty: info.qty, confirmedQty, personBreakdown: info.personBreakdown })
             }
           }
         }
@@ -488,9 +522,10 @@ export function AdminWeekView() {
                             </div>
                           </div>
                           {isCancelled ? (
-                            <p style={{ margin: 0, padding: '0.6rem 0.75rem', color: 'var(--color-danger, #ef4444)', fontSize: '0.8125rem', fontWeight: 600 }}>
-                              Cancelled — kitchen closed
-                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', padding: '2rem 0.75rem', minHeight: 140 }}>
+                              <span style={{ fontSize: '4rem', lineHeight: 1 }}>👨‍🍳</span>
+                              <span style={{ color: 'var(--color-danger, #ef4444)', fontSize: '0.875rem', fontWeight: 700 }}>Cancelled — kitchen closed</span>
+                            </div>
                           ) : (
                             <>
                               {isEditing ? (
@@ -553,6 +588,13 @@ export function AdminWeekView() {
                                           <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
                                             {r.qty} {r.unit} × {money(r.unitPrice)}
                                           </div>
+                                          {r.personBreakdown.length > 0 ? (
+                                            <WhoChose breakdown={r.personBreakdown} />
+                                          ) : (
+                                            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', fontStyle: 'italic', marginTop: '0.15rem' }}>
+                                              Added by admin
+                                            </div>
+                                          )}
                                         </div>
                                         <span style={{ fontSize: '0.875rem', fontWeight: 600, whiteSpace: 'nowrap' }}>{money(r.amount)}</span>
                                       </li>
@@ -571,14 +613,17 @@ export function AdminWeekView() {
                                   </div>
                                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                                     {pendingItems.map((p) => (
-                                      <li key={p.menuItemId} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', fontSize: '0.8125rem' }}>
-                                        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-                                        <span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
-                                          {p.aggQty} {p.unit}
-                                          {p.confirmedQty > 0 && (
-                                            <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}> (sent: {p.confirmedQty})</span>
-                                          )}
-                                        </span>
+                                      <li key={p.menuItemId} style={{ fontSize: '0.8125rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                                          <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                                          <span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
+                                            {p.aggQty} {p.unit}
+                                            {p.confirmedQty > 0 && (
+                                              <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}> (sent: {p.confirmedQty})</span>
+                                            )}
+                                          </span>
+                                        </div>
+                                        <WhoChose breakdown={p.personBreakdown} />
                                       </li>
                                     ))}
                                   </ul>

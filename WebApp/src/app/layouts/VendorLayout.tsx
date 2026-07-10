@@ -32,7 +32,7 @@ export function VendorLayout() {
   return (
     <Layout>
       <Header
-        title="Vendor Portal"
+        title="Shef's Kitchen 👨‍🍳"
         actions={
           <nav className="vendor-nav">
             {vendorNav.map((item) => (

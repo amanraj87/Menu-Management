@@ -227,7 +227,10 @@ export function VendorWeekScreen() {
                           )}
                         </View>
                         {isCancelled ? (
-                          <Text style={styles.cancelledNote}>Cancelled — kitchen closed</Text>
+                          <View style={styles.cancelledCard}>
+                            <Text style={styles.cancelledEmoji}>👨‍🍳</Text>
+                            <Text style={styles.cancelledNote}>Cancelled — kitchen closed</Text>
+                          </View>
                         ) : rows.length === 0 ? (
                           <Text style={styles.emptyRow}>No orders</Text>
                         ) : (
@@ -378,7 +381,9 @@ const styles = StyleSheet.create({
   mealLabel: { color: colors.textMuted, fontSize: font.small, fontWeight: '700' },
   mealLabelCancelled: { textDecorationLine: 'line-through' },
   cancelledLabel: { color: colors.danger, fontSize: font.tiny, fontWeight: '700' },
-  cancelledNote: { color: colors.danger, fontSize: font.small, fontWeight: '600', paddingVertical: 4 },
+  cancelledCard: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl, gap: spacing.sm },
+  cancelledEmoji: { fontSize: 56, lineHeight: 64 },
+  cancelledNote: { color: colors.danger, fontSize: font.small, fontWeight: '700' },
   rowHead: { flexDirection: 'row', paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: colors.border },
   headText: { color: colors.textFaint, fontSize: font.tiny, fontWeight: '700' },
   itemRow: { flexDirection: 'row', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: colors.border },

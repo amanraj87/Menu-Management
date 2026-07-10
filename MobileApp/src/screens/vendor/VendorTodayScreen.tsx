@@ -4,13 +4,11 @@ import { Screen } from '../../ui/Screen';
 import { Card, EmptyState, Loader } from '../../ui';
 import { SignOutButton } from '../../ui/SignOutButton';
 import { useConfirmedOrders } from '../../api/hooks';
-import { useSession } from '../../context/SessionContext';
 import { colors, font, mealMeta, radius, spacing } from '../../theme';
 import { formatLong, todayISO } from '../../utils/date';
 import { MEAL_TYPES, type MealType } from '../../types';
 
 export function VendorTodayScreen() {
-  const { session } = useSession();
   const today = todayISO();
   const { orders, loading, refetch } = useConfirmedOrders(today);
 
@@ -28,7 +26,7 @@ export function VendorTodayScreen() {
 
   return (
     <Screen
-      title={`Hello, ${session?.name?.split(' ')[0] ?? 'chef'} 👨‍🍳`}
+      title={"Shef's Kitchen👨‍🍳"}
       subtitle={formatLong(today)}
       headerRight={<SignOutButton />}
       refreshing={loading}

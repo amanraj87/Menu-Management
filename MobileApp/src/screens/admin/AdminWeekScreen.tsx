@@ -26,15 +26,43 @@ function dayName(iso: string): string {
   return DAY_NAMES[new Date(y, m - 1, d).getDay()];
 }
 
-type Row = { menuItemId: string; name: string; unit: string; qty: number; unitPrice: number; amount: number };
-type PendingItem = { menuItemId: string; name: string; unit: string; aggQty: number; confirmedQty: number };
+type PersonShare = { userId: string; userName: string; quantity: number };
+type Row = { menuItemId: string; name: string; unit: string; qty: number; unitPrice: number; amount: number; personBreakdown: PersonShare[] };
+type PendingItem = { menuItemId: string; name: string; unit: string; aggQty: number; confirmedQty: number; personBreakdown: PersonShare[] };
+
+/** Collapsible "who chose this" list, grouped by quantity (same qty on one line). */
+function WhoChose({ breakdown }: { breakdown: PersonShare[] }) {
+  const [open, setOpen] = useState(false);
+  if (breakdown.length === 0) return null;
+  const byQty = new Map<number, string[]>();
+  for (const p of breakdown) {
+    if (!byQty.has(p.quantity)) byQty.set(p.quantity, []);
+    byQty.get(p.quantity)!.push(p.userName);
+  }
+  const groups = Array.from(byQty.entries()).sort((a, b) => b[0] - a[0]);
+  const total = breakdown.length;
+  return (
+    <View style={styles.whoWrap}>
+      <Pressable onPress={() => setOpen(o => !o)} hitSlop={4}>
+        <Text style={styles.whoToggle}>
+          👤 {total} {total === 1 ? 'person' : 'people'} {open ? '▴' : '▾'}
+        </Text>
+      </Pressable>
+      {open && groups.map(([qty, names]) => (
+        <Text key={qty} style={styles.whoGroupLine} numberOfLines={3}>
+          <Text style={styles.whoQty}>{qty}× </Text>{names.join(', ')}
+        </Text>
+      ))}
+    </View>
+  );
+}
 
 export function AdminWeekScreen() {
   const toast = useToast();
   const [wkStart, setWkStart] = useState(() => getWeekStart(todayISO()));
   const [ordersByDate, setOrdersByDate] = useState<Record<string, ConfirmedOrder[]>>({});
   // Live user selections keyed by `${date}|${meal}` → (menuItemId → {name, unit, qty}).
-  const [aggByKey, setAggByKey] = useState<Record<string, Record<string, { name: string; unit: string; qty: number }>>>({});
+  const [aggByKey, setAggByKey] = useState<Record<string, Record<string, { name: string; unit: string; qty: number; personBreakdown: PersonShare[] }>>>({});
   const [loading, setLoading] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -273,11 +301,11 @@ export function AdminWeekScreen() {
         (map[o.date] = map[o.date] ?? []).push(order);
       });
       setOrdersByDate(map);
-      const agg: Record<string, Record<string, { name: string; unit: string; qty: number }>> = {};
+      const agg: Record<string, Record<string, { name: string; unit: string; qty: number; personBreakdown: PersonShare[] }>> = {};
       (aggRes.aggregatedOrdersForRange ?? []).forEach((a: any) => {
-        const items: Record<string, { name: string; unit: string; qty: number }> = {};
+        const items: Record<string, { name: string; unit: string; qty: number; personBreakdown: PersonShare[] }> = {};
         (a.items ?? []).forEach((it: any) => {
-          items[it.menuItemId] = { name: it.name, unit: it.unit, qty: it.quantity };
+          items[it.menuItemId] = { name: it.name, unit: it.unit, qty: it.quantity, personBreakdown: it.personBreakdown ?? [] };
         });
         agg[`${a.date}|${a.mealType}`] = items;
       });
@@ -306,7 +334,7 @@ export function AdminWeekScreen() {
       o.items.forEach(it => {
         const unitPrice = priceMap.get(it.menuItemId) ?? 0;
         const amount = unitPrice * it.quantity;
-        meals[o.mealType].push({ menuItemId: it.menuItemId, name: it.name, unit: it.unit, qty: it.quantity, unitPrice, amount });
+        meals[o.mealType].push({ menuItemId: it.menuItemId, name: it.name, unit: it.unit, qty: it.quantity, unitPrice, amount, personBreakdown: it.personBreakdown ?? [] });
         subtotals[o.mealType] += amount;
         confirmedQtys[o.mealType].set(it.menuItemId, it.quantity);
       });
@@ -321,7 +349,7 @@ export function AdminWeekScreen() {
         const info = agg[menuItemId];
         const confirmedQty = confirmedQtys[m].get(menuItemId) ?? 0;
         if (info.qty !== confirmedQty) {
-          pending[m].push({ menuItemId, name: info.name, unit: info.unit, aggQty: info.qty, confirmedQty });
+          pending[m].push({ menuItemId, name: info.name, unit: info.unit, aggQty: info.qty, confirmedQty, personBreakdown: info.personBreakdown });
         }
       }
     }
@@ -502,7 +530,10 @@ export function AdminWeekScreen() {
                           </View>
                         </View>
                         {isCancelled ? (
-                          <Text style={styles.cancelledNote}>Cancelled — kitchen closed</Text>
+                          <View style={styles.cancelledCard}>
+                            <Text style={styles.cancelledEmoji}>👨‍🍳</Text>
+                            <Text style={styles.cancelledNote}>Cancelled — kitchen closed</Text>
+                          </View>
                         ) : (
                           <>
                             {isEditing ? (
@@ -561,11 +592,18 @@ export function AdminWeekScreen() {
                                   <Text style={[styles.colAmt, styles.headText]}>Amount</Text>
                                 </View>
                                 {rows.map((r, i) => (
-                                  <View key={`${meal}-${i}`} style={styles.itemRow}>
-                                    <Text style={styles.colItem} numberOfLines={1}>{r.name}</Text>
-                                    <Text style={styles.colQty}>{r.qty}</Text>
-                                    <Text style={styles.colPrice}>{r.unitPrice}</Text>
-                                    <Text style={styles.colAmt}>{Math.round(r.amount)}</Text>
+                                  <View key={`${meal}-${i}`} style={styles.itemBlock}>
+                                    <View style={styles.itemRowInner}>
+                                      <Text style={styles.colItem} numberOfLines={1}>{r.name}</Text>
+                                      <Text style={styles.colQty}>{r.qty}</Text>
+                                      <Text style={styles.colPrice}>{r.unitPrice}</Text>
+                                      <Text style={styles.colAmt}>{Math.round(r.amount)}</Text>
+                                    </View>
+                                    {r.personBreakdown.length > 0 ? (
+                                      <WhoChose breakdown={r.personBreakdown} />
+                                    ) : (
+                                      <Text style={styles.whoTextMuted}>Added by admin</Text>
+                                    )}
                                   </View>
                                 ))}
                                 <View style={styles.subtotalRow}>
@@ -578,12 +616,15 @@ export function AdminWeekScreen() {
                               <View style={styles.pendingBox}>
                                 <Text style={styles.pendingTitle}>Pending — not yet sent to Shefs</Text>
                                 {pendingItems.map(p => (
-                                  <View key={p.menuItemId} style={styles.pendingRow}>
-                                    <Text style={styles.pendingName} numberOfLines={1}>{p.name}</Text>
-                                    <Text style={styles.pendingQty}>
-                                      {p.aggQty} {p.unit}
-                                      {p.confirmedQty > 0 ? ` (sent: ${p.confirmedQty})` : ''}
-                                    </Text>
+                                  <View key={p.menuItemId} style={styles.pendingItemBlock}>
+                                    <View style={styles.pendingRow}>
+                                      <Text style={styles.pendingName} numberOfLines={1}>{p.name}</Text>
+                                      <Text style={styles.pendingQty}>
+                                        {p.aggQty} {p.unit}
+                                        {p.confirmedQty > 0 ? ` (sent: ${p.confirmedQty})` : ''}
+                                      </Text>
+                                    </View>
+                                    <WhoChose breakdown={p.personBreakdown} />
                                   </View>
                                 ))}
                               </View>
@@ -771,7 +812,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(245,158,11,0.35)',
   },
   pendingTitle: { color: colors.warning, fontSize: font.tiny, fontWeight: '700', marginBottom: 4 },
-  pendingRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm, paddingVertical: 2 },
+  pendingItemBlock: { paddingVertical: 2 },
+  pendingRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
   pendingName: { flex: 1, color: colors.text, fontSize: font.small },
   pendingQty: { color: colors.text, fontSize: font.small, fontWeight: '600' },
   mealLabelCancelled: { textDecorationLine: 'line-through' },
@@ -792,10 +834,19 @@ const styles = StyleSheet.create({
     left: 18,
   },
   toggleThumbActive: { left: 2 },
-  cancelledNote: { color: colors.danger, fontSize: font.small, fontWeight: '600', paddingVertical: 4 },
+  cancelledCard: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl, gap: spacing.sm },
+  cancelledEmoji: { fontSize: 56, lineHeight: 64 },
+  cancelledNote: { color: colors.danger, fontSize: font.small, fontWeight: '700' },
   rowHead: { flexDirection: 'row', paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: colors.border },
   headText: { color: colors.textFaint, fontSize: font.tiny, fontWeight: '700' },
   itemRow: { flexDirection: 'row', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: colors.border },
+  itemBlock: { paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: colors.border },
+  itemRowInner: { flexDirection: 'row' },
+  whoTextMuted: { color: colors.textFaint, fontSize: font.tiny, fontStyle: 'italic', marginTop: 2 },
+  whoWrap: { marginTop: 2 },
+  whoToggle: { color: colors.textMuted, fontSize: font.tiny, fontWeight: '600' },
+  whoGroupLine: { color: colors.textMuted, fontSize: font.tiny, marginTop: 1, marginLeft: 2 },
+  whoQty: { color: colors.text, fontWeight: '700' },
   colItem: { flex: 1, color: colors.text, fontSize: font.small },
   colQty: { width: 40, textAlign: 'right', color: colors.text, fontSize: font.small },
   colPrice: { width: 56, textAlign: 'right', color: colors.textMuted, fontSize: font.small },

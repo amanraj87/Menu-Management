@@ -258,9 +258,10 @@ export function VendorWeekView() {
                             )}
                           </div>
                           {isCancelled ? (
-                            <p style={{ margin: 0, padding: '0.6rem 0.75rem', color: 'var(--color-danger, #ef4444)', fontSize: '0.8125rem', fontWeight: 600 }}>
-                              Cancelled — kitchen closed
-                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', padding: '2rem 0.75rem', minHeight: 140 }}>
+                              <span style={{ fontSize: '4rem', lineHeight: 1 }}>👨‍🍳</span>
+                              <span style={{ color: 'var(--color-danger, #ef4444)', fontSize: '0.875rem', fontWeight: 700 }}>Cancelled — kitchen closed</span>
+                            </div>
                           ) : rows.length === 0 ? (
                             <p style={{ margin: 0, padding: '0.6rem 0.75rem', color: 'var(--color-text-muted)', fontSize: '0.8125rem', fontStyle: 'italic' }}>No order</p>
                           ) : (
