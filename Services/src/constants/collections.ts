@@ -12,6 +12,7 @@ export const COLLECTIONS = {
   meal_cancellations: 'meal_cancellations',
   settings: 'settings',
   vendor_day_notes: 'vendor_day_notes',
+  job_runs: 'job_runs',
 } as const
 
 export type CollectionName = keyof typeof COLLECTIONS

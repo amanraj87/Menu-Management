@@ -9,6 +9,7 @@ import * as mealDone from './mealDone.js'
 import * as mealCancellations from './mealCancellations.js'
 import * as settings from './settings.js'
 import * as vendorDayNotes from './vendorDayNotes.js'
+import { runAutoImport } from '../jobs/autoImport.js'
 
 export const resolvers = {
   Query: {
@@ -51,5 +52,6 @@ export const resolvers = {
     updateSettings: settings.updateSettings,
     toggleMealCancellation: mealCancellations.toggleMealCancellation,
     updateVendorDayNote: vendorDayNotes.updateVendorDayNote,
+    runAutoImport,
   },
 }

@@ -229,6 +229,12 @@ export const TOGGLE_MEAL_CANCELLATION = `
   }
 `;
 
+export const RUN_AUTO_IMPORT = `
+  mutation RunAutoImport($targetWeekStart: String) {
+    runAutoImport(targetWeekStart: $targetWeekStart)
+  }
+`;
+
 export const VENDOR_DAY_NOTES_FOR_RANGE = `
   query VendorDayNotesForRange($startDate: String!, $endDate: String!) {
     vendorDayNotesForRange(startDate: $startDate, endDate: $endDate) { id date finalAmount comment updatedAt }

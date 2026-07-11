@@ -10,7 +10,7 @@ import {
   useToggleMealCancellation,
   useVendorDayNotesForRange,
 } from '@/shared/graphql/hooks'
-import { AGGREGATED_ORDER, CONFIRM_ORDER_WITH_ITEMS, CONFIRMED_ORDERS_FOR_RANGE } from '@/shared/graphql/operations'
+import { AGGREGATED_ORDER, CONFIRM_ORDER_WITH_ITEMS, CONFIRMED_ORDERS_FOR_RANGE, AGGREGATED_ORDERS_FOR_RANGE, RUN_AUTO_IMPORT } from '@/shared/graphql/operations'
 import { Card, Button, Loader } from '@/shared/ui'
 import { useToastStore } from '@/shared/stores/toastStore'
 import type { ConfirmedOrder, MealType } from '@/shared/types'
@@ -138,6 +138,7 @@ export function AdminWeekView() {
   const [editNewId, setEditNewId] = useState('')
   const [editNewQty, setEditNewQty] = useState('1')
   const [editSaving, setEditSaving] = useState(false)
+  const [autoImporting, setAutoImporting] = useState(false)
   // One shared guard for every write that touches confirmed orders — running
   // confirm/edit concurrently interleaves full-replace writes.
   const writeBusy = weekPending || editSaving
@@ -290,6 +291,24 @@ export function AdminWeekView() {
     })
   }, [dates, orders, priceByMenuId, cancelledSet, aggByKey])
 
+  const handleRunAutoImport = async () => {
+    if (autoImporting) return
+    setAutoImporting(true)
+    try {
+      const res = await client.mutate<{ runAutoImport: number }>({
+        mutation: RUN_AUTO_IMPORT,
+        variables: { targetWeekStart: weekStart },
+      })
+      const n = res.data?.runAutoImport ?? 0
+      await client.refetchQueries({ include: [AGGREGATED_ORDERS_FOR_RANGE] })
+      toast.add(`Auto-import created ${n} selection slot${n === 1 ? '' : 's'} for this week.`, n > 0 ? 'success' : 'info')
+    } catch (e) {
+      toast.add((e as Error).message, 'error')
+    } finally {
+      setAutoImporting(false)
+    }
+  }
+
   const handleConfirmWeek = async () => {
     if (writeBusy) return
     const combos = dates.flatMap((d) => MEALS.map((m) => ({ date: d, meal: m.id })))
@@ -410,6 +429,16 @@ export function AdminWeekView() {
                   {settings.deliveryCharge != null && <Button size="sm" variant="danger" onClick={() => updateSettings(settings.monthlyMealCap, null)} disabled={settingsPending}>Remove</Button>}
                 </div>
               )}
+            </div>
+            {/* Auto-import (test utility) */}
+            <div style={{ border: '1px dashed var(--color-border)', borderRadius: 8, padding: '0.75rem', background: 'var(--color-surface)' }}>
+              <div style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: '0.35rem' }}>Weekly auto-import <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>(test)</span></div>
+              <p style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                Runs the Saturday auto-import into the currently viewed week ({shortDate(weekStart)} – {shortDate(weekEnd)}) for all users — copies their prior week's meals into empty slots only.
+              </p>
+              <Button size="sm" variant="outline" onClick={handleRunAutoImport} disabled={autoImporting}>
+                {autoImporting ? 'Running…' : '↻ Run auto-import now'}
+              </Button>
             </div>
           </div>
         )}

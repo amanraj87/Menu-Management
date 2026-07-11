@@ -10,6 +10,7 @@ import {
   AGGREGATED_ORDERS_FOR_RANGE,
   CONFIRMED_ORDERS_FOR_RANGE,
   CONFIRM_ORDER_WITH_ITEMS,
+  RUN_AUTO_IMPORT,
   TOGGLE_MEAL_CANCELLATION,
   UPDATE_SETTINGS,
 } from '../../api/operations';
@@ -84,6 +85,7 @@ export function AdminWeekScreen() {
   const [editNewId, setEditNewId] = useState('');
   const [editNewQty, setEditNewQty] = useState('1');
   const [editSaving, setEditSaving] = useState(false);
+  const [autoImporting, setAutoImporting] = useState(false);
   // One shared guard for every write that touches confirmed orders — running
   // confirm/edit concurrently (or against a stale/unloaded ordersByDate)
   // interleaves full-replace writes and loses items.
@@ -226,6 +228,21 @@ export function AdminWeekScreen() {
       toast.show((e as Error).message, 'error');
     } finally {
       setDeliverySaving(false);
+    }
+  };
+
+  const handleRunAutoImport = async () => {
+    if (autoImporting) return;
+    setAutoImporting(true);
+    try {
+      const res = await gqlRequest<{ runAutoImport: number }>(RUN_AUTO_IMPORT, { targetWeekStart: wkStart });
+      const n = res.runAutoImport ?? 0;
+      toast.show(`Auto-import created ${n} selection slot${n === 1 ? '' : 's'} for this week.`, n > 0 ? 'success' : 'info');
+      await load();
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setAutoImporting(false);
     }
   };
 
@@ -434,6 +451,19 @@ export function AdminWeekScreen() {
                 )}
               </View>
             )}
+
+            {/* Auto-import (test utility) */}
+            <SectionLabel>Weekly auto-import (test)</SectionLabel>
+            <Text style={styles.autoImportHint}>
+              Runs the Saturday auto-import into the viewed week for all users — copies each user's prior week into empty slots only.
+            </Text>
+            <Button
+              title={autoImporting ? 'Running…' : '↻ Run auto-import now'}
+              variant="outline"
+              onPress={handleRunAutoImport}
+              loading={autoImporting}
+              fullWidth
+            />
           </View>
         )}
       </Card>
@@ -667,6 +697,7 @@ const styles = StyleSheet.create({
   settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   settingValue: { color: colors.text, fontSize: 18, fontWeight: '800' },
   settingEditRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  autoImportHint: { color: colors.textMuted, fontSize: font.tiny, marginBottom: spacing.sm },
   settingInput: {
     flex: 1,
     borderWidth: 1,

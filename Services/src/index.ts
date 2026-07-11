@@ -5,6 +5,7 @@ import { typeDefs } from './schema.js'
 import { resolvers } from './resolvers/index.js'
 import { connectDb, closeDb } from './db.js'
 import { createContext } from './context.js'
+import { startAutoImportScheduler } from './jobs/autoImport.js'
 
 const yoga = createYoga({
   schema: createSchema({ typeDefs, resolvers }),
@@ -19,6 +20,7 @@ const port = Number(process.env.PORT) || 4000
 
 async function main() {
   await connectDb()
+  startAutoImportScheduler()
   server.listen(port, () => {
     console.log(`GraphQL server: http://localhost:${port}/graphql`)
   })

@@ -238,5 +238,7 @@ export const typeDefs = `#graphql
     toggleMealCancellation(date: String!, mealType: MealType!, cancelled: Boolean!): Boolean!
     """Vendor: set or update the final amount and comment for a day."""
     updateVendorDayNote(date: String!, finalAmount: Float, comment: String!): VendorDayNote!
+    """Admin: manually run the weekly auto-import into the given week (defaults to next week). Returns slots created."""
+    runAutoImport(targetWeekStart: String): Int!
   }
 `

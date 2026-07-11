@@ -430,6 +430,12 @@ export const UPDATE_VENDOR_DAY_NOTE = gql`
   }
 `
 
+export const RUN_AUTO_IMPORT = gql`
+  mutation RunAutoImport($targetWeekStart: String) {
+    runAutoImport(targetWeekStart: $targetWeekStart)
+  }
+`
+
 export const MEAL_DONE_STATUS = gql`
   query MealDoneStatus($date: String!, $mealType: MealType!) {
     mealDoneStatus(date: $date, mealType: $mealType) {
