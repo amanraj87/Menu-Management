@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import { Outlet, useNavigate } from 'react-router-dom'
-import { Layout, Sidebar, Header } from '@/shared/ui'
+import { Outlet, useNavigate, NavLink } from 'react-router-dom'
+import { Layout, Header } from '@/shared/ui'
 import { useUIStore } from '@/shared/stores/uiStore'
 
 const adminNav = [
@@ -11,7 +11,7 @@ const adminNav = [
 ]
 
 export function AdminLayout() {
-  const { sidebarOpen, toggleSidebar, userSession } = useUIStore()
+  const userSession = useUIStore((s) => s.userSession)
   const setUserSession = useUIStore((s) => s.setUserSession)
   const navigate = useNavigate()
   const isUnauthorized = !userSession?.userId || userSession.role !== 'admin'
@@ -28,28 +28,30 @@ export function AdminLayout() {
   const signOut = () => { setUserSession(null); navigate('/', { replace: true }) }
   return (
     <Layout>
-      <Sidebar
-        open={sidebarOpen}
-        onClose={() => useUIStore.getState().setSidebarOpen(false)}
-        header={<span>Admin</span>}
-        items={adminNav}
+      <Header
+        title="Admin Portal"
+        actions={
+          <nav className="vendor-nav">
+            {adminNav.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  `vendor-nav-btn ${isActive ? 'vendor-nav-btn-active' : ''}`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+            <button type="button" className="vendor-nav-btn" onClick={signOut}>
+              Sign out
+            </button>
+          </nav>
+        }
       />
-      <div className="layout-main">
-        <Header
-          title="Admin Portal"
-          actions={
-            <nav className="vendor-nav">
-              <button type="button" className="vendor-nav-btn md:hidden" onClick={toggleSidebar}>
-                Menu
-              </button>
-              <button type="button" className="vendor-nav-btn" onClick={signOut}>Sign out</button>
-            </nav>
-          }
-        />
-        <main style={{ padding: '1.25rem', flex: 1 }}>
-          <Outlet />
-        </main>
-      </div>
+      <main style={{ padding: '1.25rem', flex: 1 }}>
+        <Outlet />
+      </main>
     </Layout>
   )
 }
