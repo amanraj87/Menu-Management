@@ -142,13 +142,6 @@ export function PersonTodayScreen() {
     0,
   );
 
-  // Saturday (6) or Sunday (0) — nudge the user to plan the upcoming week.
-  const isWeekend = (() => {
-    const [y, m, d] = today.split('-').map(Number);
-    const dow = new Date(y, m - 1, d).getDay();
-    return dow === 0 || dow === 6;
-  })();
-
   return (
     <Screen
       title={`Hi, ${session?.name?.split(' ')[0] ?? 'there'} 👋`}
@@ -160,26 +153,6 @@ export function PersonTodayScreen() {
         <Loader label="Loading today's meals…" />
       ) : (
         <>
-          {isWeekend && (
-            <Card padded={false} style={styles.reminderCard}>
-              <View style={styles.reminderRow}>
-                <Text style={styles.reminderIcon}>🗓️</Text>
-                <View style={styles.reminderTextWrap}>
-                  <Text style={styles.reminderTitle}>It's the weekend — plan next week!</Text>
-                  <Text style={styles.reminderBody}>
-                    Open “Plan my week”, move to next week, and tap “Import from last week” to set your meals.
-                  </Text>
-                </View>
-              </View>
-              <Button
-                title="Plan next week"
-                icon="🗓️"
-                onPress={() => nav.navigate('Week')}
-                fullWidth
-                style={{ marginTop: spacing.sm }}
-              />
-            </Card>
-          )}
           {MEAL_TYPES.map(meal => {
             const rows = todayByMeal[meal];
             const meta = mealMeta[meal];
@@ -303,16 +276,6 @@ export function PersonTodayScreen() {
 }
 
 const styles = StyleSheet.create({
-  reminderCard: {
-    borderColor: colors.warning,
-    backgroundColor: 'rgba(245,158,11,0.10)',
-    padding: spacing.lg,
-  },
-  reminderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  reminderIcon: { fontSize: 22 },
-  reminderTextWrap: { flex: 1 },
-  reminderTitle: { color: colors.text, fontSize: font.body, fontWeight: '700', marginBottom: 2 },
-  reminderBody: { color: colors.textMuted, fontSize: font.small },
   mealHeader: {
     flexDirection: 'row',
     alignItems: 'center',

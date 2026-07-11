@@ -39,7 +39,7 @@ function addDaysISO(dateStr: string, n: number): string {
  * items yet in the target week — never overwrites a user's own planning.
  * Returns the number of selection slots created.
  */
-export async function runWeeklyAutoImport(targetWeekStart: string): Promise<number> {
+async function runWeeklyAutoImport(targetWeekStart: string): Promise<number> {
   const db = getDb()
   const sourceWeekStart = addDaysISO(targetWeekStart, -7)
 
@@ -81,6 +81,29 @@ export function computeUpcomingWeekStart(): string {
   return addDaysISO(mondayOfISO(new Date()), 7)
 }
 
+const JOB_ID = 'weekly_auto_import'
+
+/**
+ * Runs the import AND records the run in the `job_runs` collection so you can
+ * confirm from the DB that it fired. Keeps a rolling log of the last 20 runs.
+ */
+export async function runAndRecordAutoImport(targetWeekStart: string, source: string): Promise<number> {
+  const created = await runWeeklyAutoImport(targetWeekStart)
+  const db = getDb()
+  const now = new Date()
+  const update = {
+    $set: { lastWeek: targetWeekStart, ranAt: now, created, source },
+    $push: { runs: { $each: [{ week: targetWeekStart, ranAt: now, created, source }], $slice: -20 } },
+  }
+  await db.collection(COLLECTIONS.job_runs).updateOne(
+    { _id: JOB_ID as unknown as never },
+    update as unknown as Record<string, unknown>,
+    { upsert: true },
+  )
+  console.log(`[auto-import] (${source}) imported ${created} selection slot(s) into week of ${targetWeekStart}`)
+  return created
+}
+
 /**
  * Admin-triggered manual run of the weekly auto-import (for testing / catch-up).
  * Defaults to the upcoming week when no target is given.
@@ -93,43 +116,5 @@ export async function runAutoImport(
   const user = context.user
   if (!user || user.role !== 'admin') throw new Error('Unauthorized: admin role required')
   const target = args.targetWeekStart || computeUpcomingWeekStart()
-  return runWeeklyAutoImport(target)
-}
-
-/* ------------------------------------------------------------------ */
-/* Scheduler                                                           */
-/* ------------------------------------------------------------------ */
-
-const JOB_ID = 'weekly_auto_import'
-const TICK_MS = 60 * 60 * 1000 // check hourly
-
-async function maybeRun(): Promise<void> {
-  if (process.env.DISABLE_AUTO_IMPORT === 'true') return
-
-  const now = new Date()
-  const day = now.getDay() // 0 = Sun ... 6 = Sat
-  // Run over the weekend (Sat/Sun) so next week is ready before Monday.
-  if (day !== 6 && day !== 0) return
-
-  const targetWeekStart = addDaysISO(mondayOfISO(now), 7)
-
-  const db = getDb()
-  const jobs = db.collection(COLLECTIONS.job_runs)
-  const marker = await jobs.findOne({ _id: JOB_ID as unknown as never })
-  if (marker && (marker as { lastWeek?: string }).lastWeek === targetWeekStart) return
-
-  const created = await runWeeklyAutoImport(targetWeekStart)
-  await jobs.updateOne(
-    { _id: JOB_ID as unknown as never },
-    { $set: { lastWeek: targetWeekStart, ranAt: now, created } },
-    { upsert: true },
-  )
-  console.log(`[auto-import] Imported ${created} selection slot(s) into week of ${targetWeekStart}`)
-}
-
-/** Starts the weekly auto-import scheduler (runs once on boot, then hourly). */
-export function startAutoImportScheduler(): void {
-  const tick = () => { maybeRun().catch(err => console.error('[auto-import] failed:', err)) }
-  tick()
-  setInterval(tick, TICK_MS)
+  return runAndRecordAutoImport(target, 'admin-manual')
 }

@@ -1,5 +1,6 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/graphql", "destination": "/api/graphql" }, { "source": "/graphql/(.*)", "destination": "/api/graphql" }]
+  "rewrites": [{ "source": "/graphql", "destination": "/api/graphql" }, { "source": "/graphql/(.*)", "destination": "/api/graphql" }],
+  "crons": [{ "path": "/api/cron/auto-import", "schedule": "0 1 * * 6" }]
 }
