@@ -91,6 +91,7 @@ export function VendorWeekView() {
   const [draftAmount, setDraftAmount] = useState('')
   const [draftComment, setDraftComment] = useState('')
   const [collapsedDays, setCollapsedDays] = useState<Set<string>>(new Set())
+  const [exporting, setExporting] = useState(false)
 
   const notesByDate = useMemo(() => {
     const map: Record<string, { finalAmount: number | null; comment: string }> = {}
@@ -180,6 +181,135 @@ export function VendorWeekView() {
   const weekTotal = week.reduce((sum, d) => sum + effectiveDayTotal(d), 0)
   const expenseTillNow = week.reduce((sum, d) => sum + (d.date <= todayStr ? effectiveDayTotal(d) : 0), 0)
 
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const ExcelJS = (await import('exceljs')).default
+      const wb = new ExcelJS.Workbook()
+      const ws = wb.addWorksheet('Week')
+
+      ws.columns = [
+        { width: 12 }, { width: 11 },                              // Date, Day
+        { width: 26 }, { width: 6 }, { width: 10 }, { width: 10 }, // Breakfast
+        { width: 28 }, { width: 6 }, { width: 10 }, { width: 10 }, // Lunch
+        { width: 26 }, { width: 6 }, { width: 10 }, { width: 10 }, // Dinner
+        { width: 9 }, { width: 10 },                               // Delivery, Day
+      ]
+
+      const NAVY = 'FF1F3864'
+      const CREAM = 'FFFDF6E3'
+      const GREEN = 'FFEAF6EA'
+      const YELLOW = 'FFFFF200'
+      const thin = { style: 'thin' as const, color: { argb: 'FFBFBFBF' } }
+      const border = { top: thin, left: thin, bottom: thin, right: thin }
+      const fill = (argb: string) => ({ type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb } })
+
+      // Header rows 1–2
+      ws.mergeCells('A1:A2'); ws.getCell('A1').value = 'Date'
+      ws.mergeCells('B1:B2'); ws.getCell('B1').value = 'Day'
+      ws.mergeCells('C1:F1'); ws.getCell('C1').value = 'BREAKFAST'
+      ws.mergeCells('G1:J1'); ws.getCell('G1').value = 'LUNCH'
+      ws.mergeCells('K1:N1'); ws.getCell('K1').value = 'DINNER'
+      ws.mergeCells('O1:O2'); ws.getCell('O1').value = 'Delivery'
+      ws.mergeCells('P1:P2'); ws.getCell('P1').value = 'Day'
+      const subHeads: Record<number, string> = { 3: 'Item', 4: 'Qty', 5: 'Unit Price', 6: 'Amount', 7: 'Item', 8: 'Qty', 9: 'Unit Price', 10: 'Amount', 11: 'Item', 12: 'Qty', 13: 'Unit Price', 14: 'Amount' }
+      for (const [col, label] of Object.entries(subHeads)) ws.getCell(2, Number(col)).value = label
+      for (let row = 1; row <= 2; row++) {
+        for (let col = 1; col <= 16; col++) {
+          const c = ws.getCell(row, col)
+          c.fill = fill(NAVY)
+          c.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+          c.alignment = { horizontal: 'center', vertical: 'middle' }
+          c.border = border
+        }
+      }
+
+      const meals: { key: Meal; col: number }[] = [
+        { key: 'breakfast', col: 3 }, { key: 'lunch', col: 7 }, { key: 'dinner', col: 11 },
+      ]
+      const sectionFill: Record<Meal, string> = { breakfast: CREAM, lunch: GREEN, dinner: GREEN }
+
+      let r = 3
+      for (const d of week) {
+        const rows: Record<Meal, Row[]> = {
+          breakfast: d.cancelled.breakfast ? [] : d.meals.breakfast,
+          lunch: d.cancelled.lunch ? [] : d.meals.lunch,
+          dinner: d.cancelled.dinner ? [] : d.meals.dinner,
+        }
+        const n = Math.max(rows.breakfast.length, rows.lunch.length, rows.dinner.length, 1)
+        const blockStart = r
+        for (let i = 0; i < n; i++) {
+          const row = ws.getRow(r)
+          if (i === 0) {
+            const [yy, mm, dd] = d.date.split('-')
+            row.getCell(1).value = `${Number(dd)}/${Number(mm)}/${yy}`
+            row.getCell(2).value = dayName(d.date)
+          }
+          for (const { key, col } of meals) {
+            if (d.cancelled[key] && i === 0) {
+              row.getCell(col).value = 'Cancelled — kitchen closed'
+            } else {
+              const it = rows[key][i]
+              if (it) {
+                row.getCell(col).value = it.name
+                row.getCell(col + 1).value = it.qty
+                row.getCell(col + 2).value = Math.round(it.unitPrice)
+                row.getCell(col + 3).value = Math.round(it.amount)
+              }
+            }
+          }
+          r++
+        }
+        // Subtotal row
+        const sr = ws.getRow(r)
+        sr.getCell(2).value = 'Subtotal'
+        sr.getCell(6).value = Math.round(d.cancelled.breakfast ? 0 : d.subtotals.breakfast)
+        sr.getCell(10).value = Math.round(d.cancelled.lunch ? 0 : d.subtotals.lunch)
+        sr.getCell(14).value = Math.round(d.cancelled.dinner ? 0 : d.subtotals.dinner)
+        sr.getCell(15).value = Math.round(deliveryOf(d))
+        sr.getCell(16).value = Math.round(effectiveDayTotal(d))
+        const subRowNum = r
+        r++
+
+        // Styling for this day block (item rows + subtotal row)
+        for (let row = blockStart; row <= subRowNum; row++) {
+          const isSub = row === subRowNum
+          for (let col = 1; col <= 16; col++) {
+            const c = ws.getCell(row, col)
+            c.border = border
+            if (col >= 3 && col <= 6) c.fill = fill(sectionFill.breakfast)
+            else if (col >= 7 && col <= 10) c.fill = fill(sectionFill.lunch)
+            else if (col >= 11 && col <= 14) c.fill = fill(sectionFill.dinner)
+            if (col === 1 || col === 2) c.font = { bold: true }
+            if (col >= 4) c.alignment = { horizontal: 'right' }
+            if (isSub && (col === 2 || col === 6 || col === 10 || col === 14 || col === 15 || col === 16)) {
+              c.fill = fill(YELLOW)
+              c.font = { bold: true }
+            }
+          }
+        }
+        r++ // blank spacer row between days
+      }
+
+      ws.views = [{ state: 'frozen', ySplit: 2 }]
+
+      const buf = await wb.xlsx.writeBuffer()
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `vendor-week-${weekStart}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      toast.add((e as Error).message, 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <>
       {/* Week header */}
@@ -194,6 +324,9 @@ export function VendorWeekView() {
             <button className="btn btn-outline btn-sm" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="Next week">›</button>
             <button className="btn btn-outline btn-sm" onClick={handleRefresh} disabled={refreshing} aria-label="Refresh" title="Refresh confirmed orders" style={{ marginLeft: '0.25rem' }}>
               {refreshing ? '…' : '↻ Refresh'}
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={handleExport} disabled={exporting} aria-label="Export to Excel" title="Export this week to an Excel (.xlsx) file">
+              {exporting ? '…' : '⬇ Export to Excel'}
             </button>
           </div>
           <div style={{ textAlign: 'right' }}>

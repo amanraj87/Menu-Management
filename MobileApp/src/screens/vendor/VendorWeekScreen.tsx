@@ -1,5 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import Share from 'react-native-share';
+import { buildVendorWeekXlsxBase64, type ExportDay } from '../../utils/vendorWeekExport';
 import { useFocusEffect } from '@react-navigation/native';
 import { Screen } from '../../ui/Screen';
 import { Button, Card, Loader } from '../../ui';
@@ -147,6 +149,47 @@ export function VendorWeekScreen() {
   const weekTotal = days.reduce((sum, date) => sum + effectiveDayTotal(date), 0);
   const expenseTillNow = days.reduce((sum, date) => sum + (date <= today ? effectiveDayTotal(date) : 0), 0);
 
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const exportDays: ExportDay[] = days.map(date => {
+        const { meals, subtotals, cancelled, activeMeals } = buildMeals(date, ordersByDate[date] ?? []);
+        const [yy, mm, dd] = date.split('-');
+        const mapRows = (meal: MealType) =>
+          meals[meal].map(r => ({ name: r.name, qty: r.qty, unitPrice: Math.round(r.unitPrice), amount: Math.round(r.amount) }));
+        return {
+          date: `${Number(dd)}/${Number(mm)}/${yy}`,
+          day: dayName(date),
+          breakfast: mapRows('breakfast'),
+          lunch: mapRows('lunch'),
+          dinner: mapRows('dinner'),
+          cancelled,
+          subtotals: {
+            breakfast: Math.round(subtotals.breakfast),
+            lunch: Math.round(subtotals.lunch),
+            dinner: Math.round(subtotals.dinner),
+          },
+          delivery: Math.round(delivery * activeMeals),
+          dayTotal: Math.round(effectiveDayTotal(date)),
+        };
+      });
+      const base64 = buildVendorWeekXlsxBase64(exportDays);
+      await Share.open({
+        title: `Vendor week ${wkStart} – ${wkEnd}`,
+        filename: `vendor-week-${wkStart}`,
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        url: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64}`,
+        failOnCancel: false,
+      });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg && !/cancel/i.test(msg)) toast.show(msg, 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <Screen
       title="Week — order sheet"
@@ -174,6 +217,13 @@ export function VendorWeekScreen() {
         variant="outline"
         onPress={load}
         loading={loading}
+        fullWidth
+      />
+      <Button
+        title={exporting ? 'Exporting…' : '⬇ Export to Excel'}
+        variant="outline"
+        onPress={handleExport}
+        loading={exporting}
         fullWidth
       />
 
