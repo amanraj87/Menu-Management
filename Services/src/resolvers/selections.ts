@@ -183,3 +183,35 @@ export async function putSelection(
   )
   return toSelection(result as SelectionDoc)!
 }
+
+export async function adminSetUserSelection(
+  _: unknown,
+  args: { userId: string; date: string; mealType: MealType; items: { menuItemId: string; quantity: number }[] },
+  context: { user?: ContextUser }
+): Promise<Record<string, unknown>> {
+  const user = context.user
+  if (!user || user.role !== 'admin') throw new Error('Unauthorized: admin role required')
+
+  const db = getDb()
+
+  // Target user must exist.
+  const target = await db.collection(COLLECTIONS.users).findOne({ _id: new ObjectId(args.userId) })
+  if (!target) throw new Error('User not found')
+
+  for (const it of args.items) {
+    if (!Number.isFinite(it.quantity) || it.quantity <= 0) {
+      throw new Error('Item quantities must be positive numbers')
+    }
+  }
+
+  const items: SelectionItemDoc[] = args.items.map((i) => ({
+    menuItemId: new ObjectId(i.menuItemId),
+    quantity: i.quantity,
+  }))
+  const result = await db.collection(COLLECTIONS.selections).findOneAndUpdate(
+    { userId: new ObjectId(args.userId), date: args.date, mealType: args.mealType },
+    { $set: { items, updatedAt: new Date() } },
+    { returnDocument: 'after', upsert: true }
+  )
+  return toSelection(result as SelectionDoc)!
+}

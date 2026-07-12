@@ -150,6 +150,19 @@ export const PUT_SELECTION = gql`
   }
 `
 
+export const ADMIN_SET_USER_SELECTION = gql`
+  mutation AdminSetUserSelection($userId: ID!, $date: String!, $mealType: MealType!, $items: [SelectionItemInput!]!) {
+    adminSetUserSelection(userId: $userId, date: $date, mealType: $mealType, items: $items) {
+      id
+      userId
+      date
+      mealType
+      items { menuItemId quantity }
+      updatedAt
+    }
+  }
+`
+
 export const AGGREGATED_ORDER = gql`
   query AggregatedOrder($date: String!, $mealType: MealType!) {
     aggregatedOrder(date: $date, mealType: $mealType) {

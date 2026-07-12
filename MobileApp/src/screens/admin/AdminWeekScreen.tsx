@@ -6,18 +6,17 @@ import { Button, Card, Loader, SectionLabel } from '../../ui';
 import { SignOutButton } from '../../ui/SignOutButton';
 import { gqlRequest } from '../../api/client';
 import {
-  AGGREGATED_ORDER,
+  ADMIN_SET_USER_SELECTION,
   AGGREGATED_ORDERS_FOR_RANGE,
-  CONFIRMED_ORDERS_FOR_RANGE,
   CONFIRM_ORDER_WITH_ITEMS,
   RUN_AUTO_IMPORT,
   TOGGLE_MEAL_CANCELLATION,
   UPDATE_SETTINGS,
 } from '../../api/operations';
-import { useMenuItems, useSettings, useMealCancellationsForRange, useVendorDayNotesForRange } from '../../api/hooks';
+import { useMenuItems, useUsers, useSettings, useMealCancellationsForRange, useVendorDayNotesForRange } from '../../api/hooks';
 import { colors, font, mealMeta, radius, spacing } from '../../theme';
 import { addDays, formatShort, isToday, todayISO, weekStart as getWeekStart } from '../../utils/date';
-import { MEAL_TYPES, type ConfirmedOrder, type MealType } from '../../types';
+import { MEAL_TYPES, type MealType } from '../../types';
 import { useToast } from '../../context/ToastContext';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -29,7 +28,7 @@ function dayName(iso: string): string {
 
 type PersonShare = { userId: string; userName: string; quantity: number };
 type Row = { menuItemId: string; name: string; unit: string; qty: number; unitPrice: number; amount: number; personBreakdown: PersonShare[] };
-type PendingItem = { menuItemId: string; name: string; unit: string; aggQty: number; confirmedQty: number; personBreakdown: PersonShare[] };
+type AggInfo = { name: string; unit: string; qty: number; personBreakdown: PersonShare[] };
 
 /** Collapsible "who chose this" list, grouped by quantity (same qty on one line). */
 function WhoChose({ breakdown }: { breakdown: PersonShare[] }) {
@@ -61,13 +60,13 @@ function WhoChose({ breakdown }: { breakdown: PersonShare[] }) {
 export function AdminWeekScreen() {
   const toast = useToast();
   const [wkStart, setWkStart] = useState(() => getWeekStart(todayISO()));
-  const [ordersByDate, setOrdersByDate] = useState<Record<string, ConfirmedOrder[]>>({});
-  // Live user selections keyed by `${date}|${meal}` → (menuItemId → {name, unit, qty}).
-  const [aggByKey, setAggByKey] = useState<Record<string, Record<string, { name: string; unit: string; qty: number; personBreakdown: PersonShare[] }>>>({});
+  // Live combined user selections keyed by `${date}|${meal}` → (menuItemId → info).
+  const [aggByKey, setAggByKey] = useState<Record<string, Record<string, AggInfo>>>({});
   const [loading, setLoading] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const menu = useMenuItems();
+  const { users } = useUsers();
   const { settings, refetch: refetchSettings } = useSettings();
   const delivery = settings.deliveryCharge ?? 0;
 
@@ -80,16 +79,14 @@ export function AdminWeekScreen() {
   const [weekConfirming, setWeekConfirming] = useState(false);
   const [weekProgress, setWeekProgress] = useState('');
   const [collapsedDays, setCollapsedDays] = useState<Set<string>>(new Set());
-  const [editingMeal, setEditingMeal] = useState<{ date: string; meal: MealType } | null>(null);
-  const [editQtys, setEditQtys] = useState<Record<string, number>>({});
-  const [editNewId, setEditNewId] = useState('');
-  const [editNewQty, setEditNewQty] = useState('1');
-  const [editSaving, setEditSaving] = useState(false);
   const [autoImporting, setAutoImporting] = useState(false);
-  // One shared guard for every write that touches confirmed orders — running
-  // confirm/edit concurrently (or against a stale/unloaded ordersByDate)
-  // interleaves full-replace writes and loses items.
-  const writeBusy = weekConfirming || editSaving || loading;
+  const [toggling, setToggling] = useState(false);
+  // Per-user selection editor (admin overwrites one user's picks for a meal).
+  const [editing, setEditing] = useState<{ date: string; meal: MealType } | null>(null);
+  const [editUserId, setEditUserId] = useState('');
+  const [editItems, setEditItems] = useState<Record<string, number>>({});
+  const [editSaving, setEditSaving] = useState(false);
+  const writeBusy = weekConfirming || loading;
 
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(wkStart, i)),
@@ -105,6 +102,71 @@ export function AdminWeekScreen() {
     return map;
   }, [vendorNotes]);
 
+  const cancelledSet = useMemo(() => {
+    const s = new Set<string>();
+    cancellations.forEach(c => s.add(`${c.date}|${c.mealType}`));
+    return s;
+  }, [cancellations]);
+
+  const priceMap = useMemo(() => {
+    const m = new Map<string, number>();
+    menu.items.forEach(i => m.set(i._id, i.pricePerUnit ?? 0));
+    return m;
+  }, [menu.items]);
+
+  const menuById = useMemo(() => {
+    const m = new Map<string, { name: string; unit: string }>();
+    menu.items.forEach(i => m.set(i._id, { name: i.name, unit: i.unit ?? '' }));
+    return m;
+  }, [menu.items]);
+
+  const menuByMeal = useMemo(() => {
+    const map: Record<MealType, typeof menu.items> = { breakfast: [], lunch: [], dinner: [] };
+    menu.items.forEach(m => { if (m.mealType && map[m.mealType]) map[m.mealType].push(m); });
+    return map;
+  }, [menu.items]);
+
+  /** Reconstruct a single user's picks (menuItemId → qty) for a slot from the aggregate. */
+  const userSelectionFor = (date: string, meal: MealType, userId: string): Record<string, number> => {
+    const out: Record<string, number> = {};
+    const agg = aggByKey[`${date}|${meal}`];
+    if (agg) {
+      for (const menuItemId of Object.keys(agg)) {
+        const share = agg[menuItemId].personBreakdown.find(p => p.userId === userId);
+        if (share) out[menuItemId] = share.quantity;
+      }
+    }
+    return out;
+  };
+
+  const openEdit = (date: string, meal: MealType) => {
+    setEditing({ date, meal });
+    setEditUserId('');
+    setEditItems({});
+  };
+  const pickEditUser = (userId: string) => {
+    setEditUserId(userId);
+    setEditItems(editing ? userSelectionFor(editing.date, editing.meal, userId) : {});
+  };
+  const handleSaveUserSelection = async () => {
+    if (!editing || !editUserId) return;
+    const { date, meal } = editing;
+    const items = Object.entries(editItems)
+      .filter(([, qty]) => qty > 0)
+      .map(([menuItemId, quantity]) => ({ menuItemId, quantity }));
+    setEditSaving(true);
+    try {
+      await gqlRequest(ADMIN_SET_USER_SELECTION, { userId: editUserId, date, mealType: meal, items });
+      toast.show('User selection updated.', 'success');
+      setEditing(null);
+      await load();
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const toggleDayCollapse = (date: string) => {
     setCollapsedDays(prev => {
       const next = new Set(prev);
@@ -113,75 +175,6 @@ export function AdminWeekScreen() {
       return next;
     });
   };
-
-  const menuByMeal = useMemo(() => {
-    const map: Record<MealType, typeof menu.items> = { breakfast: [], lunch: [], dinner: [] };
-    menu.items.forEach(m => { if (m.mealType && map[m.mealType]) map[m.mealType].push(m); });
-    return map;
-  }, [menu.items]);
-
-  const handleStartEdit = (date: string, meal: MealType) => {
-    if (writeBusy) return;
-    const rows = (ordersByDate[date] ?? [])
-      .filter(o => o.mealType === meal)
-      .flatMap(o => o.items);
-    const qtys: Record<string, number> = {};
-    for (const it of rows) qtys[it.menuItemId] = it.quantity;
-    setEditQtys(qtys);
-    setEditNewId('');
-    setEditNewQty('1');
-    setEditingMeal({ date, meal });
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editingMeal || weekConfirming || loading) return;
-    const { date, meal } = editingMeal;
-
-    const existing = (ordersByDate[date] ?? [])
-      .filter(o => o.mealType === meal)
-      .flatMap(o => o.items);
-
-    const items: { menuItemId: string; name: string; unit: string; quantity: number }[] = [];
-    for (const it of existing) {
-      const qty = editQtys[it.menuItemId] ?? 0;
-      if (qty > 0) items.push({ menuItemId: it.menuItemId, name: it.name, unit: it.unit, quantity: qty });
-    }
-
-    if (editNewId) {
-      const mi = menu.items.find(m => m._id === editNewId);
-      const nq = Math.max(1, Math.round(Number(editNewQty) || 1));
-      if (mi) {
-        const idx = items.findIndex(i => i.menuItemId === editNewId);
-        if (idx >= 0) items[idx] = { ...items[idx], quantity: items[idx].quantity + nq };
-        else items.push({ menuItemId: mi._id, name: mi.name, unit: mi.unit ?? '', quantity: nq });
-      }
-    }
-
-    setEditSaving(true);
-    try {
-      await gqlRequest(CONFIRM_ORDER_WITH_ITEMS, { date, mealType: meal, items });
-      toast.show('Saved.', 'success');
-      setEditingMeal(null);
-      load();
-    } catch (e) {
-      toast.show((e as Error).message, 'error');
-    } finally {
-      setEditSaving(false);
-    }
-  };
-
-  const cancelledSet = useMemo(() => {
-    const s = new Set<string>();
-    cancellations.forEach(c => s.add(`${c.date}|${c.mealType}`));
-    return s;
-  }, [cancellations]);
-  const [toggling, setToggling] = useState(false);
-
-  const priceMap = useMemo(() => {
-    const m = new Map<string, number>();
-    menu.items.forEach(i => m.set(i._id, i.pricePerUnit ?? 0));
-    return m;
-  }, [menu.items]);
 
   const handleToggleCancel = async (date: string, meal: MealType, currentlyCancelled: boolean) => {
     setToggling(true);
@@ -246,6 +239,7 @@ export function AdminWeekScreen() {
     }
   };
 
+  /** Push the current combined selections to the vendor (confirmed_orders). */
   const handleConfirmWeek = async () => {
     if (writeBusy) return;
     const combos = days.flatMap(d => MEAL_TYPES.map(m => ({ date: d, meal: m })));
@@ -256,29 +250,14 @@ export function AdminWeekScreen() {
     let done = 0;
     try {
       for (const { date: d, meal: m } of combos) {
-        const res = await gqlRequest<{ aggregatedOrder: { items: any[] } | null }>(
-          AGGREGATED_ORDER,
-          { date: d, mealType: m },
-        );
-        const aggItems = res.aggregatedOrder?.items ?? [];
-        if (aggItems.length === 0) {
+        const agg = aggByKey[`${d}|${m}`];
+        const items = agg
+          ? Object.entries(agg).map(([menuItemId, info]) => ({ menuItemId, name: info.name, unit: info.unit, quantity: info.qty }))
+          : [];
+        if (items.length === 0 || cancelledSet.has(`${d}|${m}`)) {
           skipped++;
         } else {
-          const existing = (ordersByDate[d] ?? [])
-            .filter(o => o.mealType === m)
-            .flatMap(o => o.items);
-          // Existing items (imports/manual adds) are kept; aggregated user
-          // selections overwrite their own items so re-confirming is idempotent.
-          const merged = new Map<string, { menuItemId: string; name: string; unit: string; quantity: number }>();
-          for (const it of existing) merged.set(it.menuItemId, { menuItemId: it.menuItemId, name: it.name, unit: it.unit, quantity: it.quantity });
-          for (const it of aggItems) {
-            merged.set(it.menuItemId, { menuItemId: it.menuItemId, name: it.name, unit: it.unit, quantity: it.quantity });
-          }
-          await gqlRequest(CONFIRM_ORDER_WITH_ITEMS, {
-            date: d,
-            mealType: m,
-            items: Array.from(merged.values()),
-          });
+          await gqlRequest(CONFIRM_ORDER_WITH_ITEMS, { date: d, mealType: m, items });
           confirmed++;
         }
         done++;
@@ -286,11 +265,10 @@ export function AdminWeekScreen() {
       }
       toast.show(
         confirmed > 0
-          ? `Confirmed ${confirmed} meal${confirmed === 1 ? '' : 's'} (${skipped} had no selections).`
+          ? `Sent ${confirmed} meal${confirmed === 1 ? '' : 's'} to the kitchen.`
           : 'No selections found for any meal this week.',
         confirmed > 0 ? 'success' : 'info',
       );
-      await load();
     } catch (e) {
       toast.show((e as Error).message, 'error');
     } finally {
@@ -302,25 +280,13 @@ export function AdminWeekScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [res, aggRes] = await Promise.all([
-        gqlRequest<{ confirmedOrdersForRange: any[] }>(
-          CONFIRMED_ORDERS_FOR_RANGE,
-          { startDate: wkStart, endDate: wkEnd },
-        ),
-        gqlRequest<{ aggregatedOrdersForRange: any[] }>(
-          AGGREGATED_ORDERS_FOR_RANGE,
-          { startDate: wkStart, endDate: wkEnd },
-        ),
-      ]);
-      const map: Record<string, ConfirmedOrder[]> = {};
-      (res.confirmedOrdersForRange ?? []).forEach((o: any) => {
-        const order = { ...o, _id: o.id };
-        (map[o.date] = map[o.date] ?? []).push(order);
-      });
-      setOrdersByDate(map);
-      const agg: Record<string, Record<string, { name: string; unit: string; qty: number; personBreakdown: PersonShare[] }>> = {};
+      const aggRes = await gqlRequest<{ aggregatedOrdersForRange: any[] }>(
+        AGGREGATED_ORDERS_FOR_RANGE,
+        { startDate: wkStart, endDate: wkEnd },
+      );
+      const agg: Record<string, Record<string, AggInfo>> = {};
       (aggRes.aggregatedOrdersForRange ?? []).forEach((a: any) => {
-        const items: Record<string, { name: string; unit: string; qty: number; personBreakdown: PersonShare[] }> = {};
+        const items: Record<string, AggInfo> = {};
         (a.items ?? []).forEach((it: any) => {
           items[it.menuItemId] = { name: it.name, unit: it.unit, qty: it.quantity, personBreakdown: it.personBreakdown ?? [] };
         });
@@ -336,61 +302,46 @@ export function AdminWeekScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const buildMeals = (date: string, orders: ConfirmedOrder[]) => {
+  const buildMeals = (date: string) => {
     const meals: Record<MealType, Row[]> = { breakfast: [], lunch: [], dinner: [] };
     const subtotals: Record<MealType, number> = { breakfast: 0, lunch: 0, dinner: 0 };
-    const confirmedQtys: Record<MealType, Map<string, number>> = {
-      breakfast: new Map(), lunch: new Map(), dinner: new Map(),
-    };
     const cancelled: Record<MealType, boolean> = {
       breakfast: cancelledSet.has(`${date}|breakfast`),
       lunch: cancelledSet.has(`${date}|lunch`),
       dinner: cancelledSet.has(`${date}|dinner`),
     };
-    orders.forEach(o => {
-      o.items.forEach(it => {
-        const unitPrice = priceMap.get(it.menuItemId) ?? 0;
-        const amount = unitPrice * it.quantity;
-        meals[o.mealType].push({ menuItemId: it.menuItemId, name: it.name, unit: it.unit, qty: it.quantity, unitPrice, amount, personBreakdown: it.personBreakdown ?? [] });
-        subtotals[o.mealType] += amount;
-        confirmedQtys[o.mealType].set(it.menuItemId, it.quantity);
-      });
-    });
-    // Compare live user selections against what's confirmed — any add/change is
-    // flagged as pending (not yet sent to the kitchen).
-    const pending: Record<MealType, PendingItem[]> = { breakfast: [], lunch: [], dinner: [] };
-    for (const m of MEAL_TYPES) {
-      const agg = aggByKey[`${date}|${m}`];
+    for (const meal of MEAL_TYPES) {
+      const agg = aggByKey[`${date}|${meal}`];
       if (!agg) continue;
       for (const menuItemId of Object.keys(agg)) {
         const info = agg[menuItemId];
-        const confirmedQty = confirmedQtys[m].get(menuItemId) ?? 0;
-        if (info.qty !== confirmedQty) {
-          pending[m].push({ menuItemId, name: info.name, unit: info.unit, aggQty: info.qty, confirmedQty, personBreakdown: info.personBreakdown });
-        }
+        const unitPrice = priceMap.get(menuItemId) ?? 0;
+        const amount = unitPrice * info.qty;
+        meals[meal].push({ menuItemId, name: info.name, unit: info.unit, qty: info.qty, unitPrice, amount, personBreakdown: info.personBreakdown });
+        subtotals[meal] += amount;
       }
     }
     const mealsTotal = MEAL_TYPES.reduce((s, m) => s + (cancelled[m] ? 0 : subtotals[m]), 0);
     // Delivery is charged per active meal (has an order and not cancelled).
     const activeMeals = MEAL_TYPES.filter(m => !cancelled[m] && subtotals[m] > 0).length;
-    return { meals, subtotals, cancelled, pending, mealsTotal, activeMeals };
+    return { meals, subtotals, cancelled, mealsTotal, activeMeals };
   };
 
   const today = todayISO();
   const weekTotal = days.reduce((sum, date) => {
-    const { mealsTotal, activeMeals } = buildMeals(date, ordersByDate[date] ?? []);
+    const { mealsTotal, activeMeals } = buildMeals(date);
     return sum + mealsTotal + delivery * activeMeals;
   }, 0);
   const expenseTillNow = days.reduce((sum, date) => {
     if (date > today) return sum;
-    const { mealsTotal, activeMeals } = buildMeals(date, ordersByDate[date] ?? []);
+    const { mealsTotal, activeMeals } = buildMeals(date);
     return sum + mealsTotal + delivery * activeMeals;
   }, 0);
 
   return (
     <Screen
       title="Week"
-      subtitle="Orders & cancellations"
+      subtitle="Combined user selections"
       headerRight={<SignOutButton />}
       refreshing={loading}
       onRefresh={load}>
@@ -484,9 +435,9 @@ export function AdminWeekScreen() {
         </Pressable>
       </View>
 
-      {/* Action buttons */}
+      {/* Send to Shefs */}
       <Button
-        title={weekConfirming ? (weekProgress || 'Confirming…') : 'Confirm all meals for the week'}
+        title={weekConfirming ? (weekProgress || 'Sending…') : 'Send to Shefs…'}
         icon="✓"
         onPress={handleConfirmWeek}
         loading={weekConfirming}
@@ -494,12 +445,11 @@ export function AdminWeekScreen() {
         fullWidth
       />
 
-      {loading && Object.keys(ordersByDate).length === 0 ? (
+      {loading && Object.keys(aggByKey).length === 0 ? (
         <Loader label="Loading week…" />
       ) : (
         days.map(date => {
-          const orders = ordersByDate[date] ?? [];
-          const { meals, subtotals, cancelled, pending, mealsTotal, activeMeals } = buildMeals(date, orders);
+          const { meals, subtotals, cancelled, mealsTotal, activeMeals } = buildMeals(date);
           const deliveryTotal = delivery * activeMeals;
           const dayTotal = mealsTotal + deliveryTotal;
           const collapsed = collapsedDays.has(date);
@@ -527,26 +477,16 @@ export function AdminWeekScreen() {
                   {MEAL_TYPES.map(meal => {
                     const rows = meals[meal];
                     const isCancelled = cancelled[meal];
-                    const isEditing = editingMeal?.date === date && editingMeal?.meal === meal;
-                    const pendingItems = pending[meal];
-                    const hasPending = !isCancelled && pendingItems.length > 0;
+                    const isEditing = editing?.date === date && editing?.meal === meal;
                     return (
                       <View key={meal} style={[styles.mealGroup, isCancelled && styles.mealGroupCancelled]}>
                         <View style={styles.mealHeadRow}>
-                          <View style={styles.mealHeadLeft}>
-                            <Text style={[styles.mealLabel, isCancelled && styles.mealLabelCancelled]}>
-                              {mealMeta[meal].icon} {mealMeta[meal].label}
-                            </Text>
-                            {hasPending && (
-                              <Text style={styles.pendingBadge}>⏳ {pendingItems.length} pending</Text>
-                            )}
-                          </View>
+                          <Text style={[styles.mealLabel, isCancelled && styles.mealLabelCancelled]}>
+                            {mealMeta[meal].icon} {mealMeta[meal].label}
+                          </Text>
                           <View style={styles.mealActions}>
                             {!isCancelled && !isEditing && (
-                              <Pressable
-                                onPress={() => handleStartEdit(date, meal)}
-                                hitSlop={6}
-                                style={styles.editBtn}>
+                              <Pressable onPress={() => openEdit(date, meal)} hitSlop={6} style={styles.editBtn}>
                                 <Text style={styles.editBtnText}>✏️</Text>
                               </Pressable>
                             )}
@@ -564,101 +504,83 @@ export function AdminWeekScreen() {
                             <Text style={styles.cancelledEmoji}>👨‍🍳</Text>
                             <Text style={styles.cancelledNote}>Cancelled — kitchen closed</Text>
                           </View>
-                        ) : (
-                          <>
-                            {isEditing ? (
-                              <View style={styles.editForm}>
-                                {rows.map((r) => (
-                                  <View key={r.menuItemId} style={styles.editRow}>
-                                    <Text style={styles.editItemName} numberOfLines={1}>{r.name}</Text>
-                                    <TextInput
-                                      style={styles.editQtyInput}
-                                      value={String(editQtys[r.menuItemId] ?? 0)}
-                                      onChangeText={(v) => setEditQtys(prev => ({ ...prev, [r.menuItemId]: Math.max(0, Number(v) || 0) }))}
-                                      keyboardType="numeric"
-                                    />
-                                    <Text style={styles.editUnit}>{r.unit}</Text>
-                                  </View>
-                                ))}
-                                <View style={styles.editAddSection}>
-                                  <View style={styles.addItemPickerWrap}>
-                                    {menuByMeal[meal]
-                                      .filter(mi => !rows.some(r => r.menuItemId === mi._id))
-                                      .map(mi => (
-                                        <Pressable
-                                          key={mi._id}
-                                          onPress={() => setEditNewId(mi._id)}
-                                          style={[styles.addItemOption, editNewId === mi._id && styles.addItemOptionSelected]}>
-                                          <Text style={[styles.addItemOptionText, editNewId === mi._id && styles.addItemOptionTextSelected]} numberOfLines={1}>
-                                            + {mi.name} ({mi.unit}{mi.pricePerUnit != null ? ` · ₹${mi.pricePerUnit}` : ''})
-                                          </Text>
-                                        </Pressable>
-                                      ))}
-                                  </View>
-                                  {editNewId !== '' && (
-                                    <TextInput
-                                      style={styles.editQtyInput}
-                                      value={editNewQty}
-                                      onChangeText={setEditNewQty}
-                                      keyboardType="numeric"
-                                      placeholder="Qty"
-                                      placeholderTextColor={colors.textFaint}
-                                    />
-                                  )}
-                                </View>
-                                <View style={styles.editActions}>
-                                  <Button title={editSaving ? '…' : 'Save'} onPress={handleSaveEdit} loading={editSaving} />
-                                  <Button title="Cancel" variant="outline" onPress={() => setEditingMeal(null)} />
-                                </View>
-                              </View>
-                            ) : rows.length === 0 ? (
-                              <Text style={styles.emptyRow}>No orders</Text>
-                            ) : (
+                        ) : isEditing ? (
+                          <View style={styles.editForm}>
+                            <Text style={styles.editHint}>Overwrite a user's picks for {mealMeta[meal].label.toLowerCase()}:</Text>
+                            <View style={styles.userPickerWrap}>
+                              {users.map(u => (
+                                <Pressable
+                                  key={u._id}
+                                  onPress={() => pickEditUser(u._id)}
+                                  style={[styles.userOption, editUserId === u._id && styles.userOptionSelected]}>
+                                  <Text style={[styles.userOptionText, editUserId === u._id && styles.userOptionTextSelected]} numberOfLines={1}>{u.name}</Text>
+                                </Pressable>
+                              ))}
+                            </View>
+                            {editUserId !== '' && (
                               <>
-                                <View style={styles.rowHead}>
-                                  <Text style={[styles.colItem, styles.headText]}>Item</Text>
-                                  <Text style={[styles.colQty, styles.headText]}>Qty</Text>
-                                  <Text style={[styles.colPrice, styles.headText]}>Price</Text>
-                                  <Text style={[styles.colAmt, styles.headText]}>Amount</Text>
-                                </View>
-                                {rows.map((r, i) => (
-                                  <View key={`${meal}-${i}`} style={styles.itemBlock}>
-                                    <View style={styles.itemRowInner}>
-                                      <Text style={styles.colItem} numberOfLines={1}>{r.name}</Text>
-                                      <Text style={styles.colQty}>{r.qty}</Text>
-                                      <Text style={styles.colPrice}>{r.unitPrice}</Text>
-                                      <Text style={styles.colAmt}>{Math.round(r.amount)}</Text>
-                                    </View>
-                                    {r.personBreakdown.length > 0 ? (
-                                      <WhoChose breakdown={r.personBreakdown} />
-                                    ) : (
-                                      <Text style={styles.whoTextMuted}>Added by admin</Text>
-                                    )}
+                                {Object.keys(editItems).length === 0 && (
+                                  <Text style={styles.editHint}>No dishes yet — add one below.</Text>
+                                )}
+                                {Object.entries(editItems).map(([mid, qty]) => (
+                                  <View key={mid} style={styles.editRow}>
+                                    <Text style={styles.editItemName} numberOfLines={1}>{menuById.get(mid)?.name ?? 'Item'}</Text>
+                                    <TextInput
+                                      style={styles.editQtyInput}
+                                      value={String(qty)}
+                                      onChangeText={(v) => setEditItems(prev => ({ ...prev, [mid]: Math.max(0, Number(v) || 0) }))}
+                                      keyboardType="numeric"
+                                    />
+                                    <Text style={styles.editUnit}>{menuById.get(mid)?.unit ?? ''}</Text>
                                   </View>
                                 ))}
-                                <View style={styles.subtotalRow}>
-                                  <Text style={styles.subtotalLabel}>Subtotal</Text>
-                                  <Text style={styles.subtotalValue}>₹{Math.round(subtotals[meal])}</Text>
+                                <View style={styles.userPickerWrap}>
+                                  {menuByMeal[meal]
+                                    .filter(mi => !(editItems[mi._id] > 0))
+                                    .map(mi => (
+                                      <Pressable
+                                        key={mi._id}
+                                        onPress={() => setEditItems(prev => ({ ...prev, [mi._id]: prev[mi._id] && prev[mi._id] > 0 ? prev[mi._id] : 1 }))}
+                                        style={styles.addItemOption}>
+                                        <Text style={styles.addItemOptionText} numberOfLines={1}>
+                                          + {mi.name}{mi.pricePerUnit != null ? ` · ₹${mi.pricePerUnit}` : ''}
+                                        </Text>
+                                      </Pressable>
+                                    ))}
                                 </View>
+                                <Text style={styles.editHint}>Set a dish to 0 to remove it. Saving overwrites this user's selection.</Text>
                               </>
                             )}
-                            {!isEditing && hasPending && (
-                              <View style={styles.pendingBox}>
-                                <Text style={styles.pendingTitle}>Pending — not yet sent to Shefs</Text>
-                                {pendingItems.map(p => (
-                                  <View key={p.menuItemId} style={styles.pendingItemBlock}>
-                                    <View style={styles.pendingRow}>
-                                      <Text style={styles.pendingName} numberOfLines={1}>{p.name}</Text>
-                                      <Text style={styles.pendingQty}>
-                                        {p.aggQty} {p.unit}
-                                        {p.confirmedQty > 0 ? ` (sent: ${p.confirmedQty})` : ''}
-                                      </Text>
-                                    </View>
-                                    <WhoChose breakdown={p.personBreakdown} />
-                                  </View>
-                                ))}
+                            <View style={styles.editActions}>
+                              <Button title={editSaving ? '…' : 'Save'} onPress={handleSaveUserSelection} loading={editSaving} disabled={!editUserId} />
+                              <Button title="Cancel" variant="outline" onPress={() => setEditing(null)} />
+                            </View>
+                          </View>
+                        ) : rows.length === 0 ? (
+                          <Text style={styles.emptyRow}>No selections</Text>
+                        ) : (
+                          <>
+                            <View style={styles.rowHead}>
+                              <Text style={[styles.colItem, styles.headText]}>Item</Text>
+                              <Text style={[styles.colQty, styles.headText]}>Qty</Text>
+                              <Text style={[styles.colPrice, styles.headText]}>Price</Text>
+                              <Text style={[styles.colAmt, styles.headText]}>Amount</Text>
+                            </View>
+                            {rows.map((r, i) => (
+                              <View key={`${meal}-${i}`} style={styles.itemBlock}>
+                                <View style={styles.itemRowInner}>
+                                  <Text style={styles.colItem} numberOfLines={1}>{r.name}</Text>
+                                  <Text style={styles.colQty}>{r.qty}</Text>
+                                  <Text style={styles.colPrice}>{r.unitPrice}</Text>
+                                  <Text style={styles.colAmt}>{Math.round(r.amount)}</Text>
+                                </View>
+                                <WhoChose breakdown={r.personBreakdown} />
                               </View>
-                            )}
+                            ))}
+                            <View style={styles.subtotalRow}>
+                              <Text style={styles.subtotalLabel}>Subtotal</Text>
+                              <Text style={styles.subtotalValue}>₹{Math.round(subtotals[meal])}</Text>
+                            </View>
                           </>
                         )}
                       </View>
@@ -752,101 +674,35 @@ const styles = StyleSheet.create({
   collapsedCommentText: { color: colors.textMuted, fontSize: font.small, fontStyle: 'italic' },
 
   body: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
-  totalPill: {
-    backgroundColor: colors.primarySoft,
-    borderRadius: 999,
-    minWidth: 26,
-    height: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-  },
-  totalPillText: { color: colors.primary, fontWeight: '800', fontSize: font.small },
   emptyRow: { color: colors.textFaint, fontStyle: 'italic', fontSize: font.small },
-
-  mealActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  editBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgElevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  editBtnText: { fontSize: 13 },
-  editForm: { padding: spacing.sm, gap: spacing.sm },
-  editRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  editItemName: { flex: 1, fontSize: font.small, fontWeight: '500', color: colors.text },
-  editQtyInput: {
-    width: 54,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgElevated,
-    color: colors.text,
-    fontSize: font.small,
-    textAlign: 'center',
-  },
-  editUnit: { fontSize: font.tiny, color: colors.textMuted, minWidth: 30 },
-  editAddSection: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm, gap: spacing.sm },
-  editActions: { flexDirection: 'row', gap: spacing.sm },
-  addItemForm: { marginTop: spacing.sm, gap: spacing.sm },
-  addItemPickerWrap: { gap: 4 },
-  addItemOption: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  addItemOptionSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-  addItemOptionText: { color: colors.text, fontSize: font.small },
-  addItemOptionTextSelected: { color: colors.primary, fontWeight: '700' },
-  addItemRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  addItemQtyInput: {
-    width: 60,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    color: colors.text,
-    fontSize: font.body,
-  },
 
   mealGroup: { marginTop: spacing.md },
   mealGroupCancelled: { opacity: 0.6 },
   mealHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
-  mealHeadLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flex: 1, flexWrap: 'wrap' },
+  mealActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  editBtn: {
+    width: 24, height: 24, borderRadius: 6, borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.bgElevated, alignItems: 'center', justifyContent: 'center',
+  },
+  editBtnText: { fontSize: 13 },
+  editForm: { gap: spacing.sm, marginTop: spacing.xs },
+  editHint: { color: colors.textMuted, fontSize: font.tiny },
+  userPickerWrap: { gap: 4 },
+  userOption: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  userOptionSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  userOptionText: { color: colors.text, fontSize: font.small },
+  userOptionTextSelected: { color: colors.primary, fontWeight: '700' },
+  addItemOption: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  addItemOptionText: { color: colors.text, fontSize: font.small },
+  editRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  editItemName: { flex: 1, fontSize: font.small, fontWeight: '500', color: colors.text },
+  editQtyInput: {
+    width: 54, paddingVertical: 4, paddingHorizontal: 6, borderRadius: radius.sm, borderWidth: 1,
+    borderColor: colors.border, backgroundColor: colors.bgElevated, color: colors.text, fontSize: font.small, textAlign: 'center',
+  },
+  editUnit: { fontSize: font.tiny, color: colors.textMuted, minWidth: 28 },
+  editActions: { flexDirection: 'row', gap: spacing.sm },
   mealLabel: { color: colors.textMuted, fontSize: font.small, fontWeight: '700' },
-  pendingBadge: {
-    fontSize: font.tiny,
-    fontWeight: '700',
-    color: colors.warning,
-    backgroundColor: 'rgba(245,158,11,0.16)',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  pendingBox: {
-    marginTop: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: radius.sm,
-    backgroundColor: 'rgba(245,158,11,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(245,158,11,0.35)',
-  },
-  pendingTitle: { color: colors.warning, fontSize: font.tiny, fontWeight: '700', marginBottom: 4 },
-  pendingItemBlock: { paddingVertical: 2 },
-  pendingRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
-  pendingName: { flex: 1, color: colors.text, fontSize: font.small },
-  pendingQty: { color: colors.text, fontSize: font.small, fontWeight: '600' },
   mealLabelCancelled: { textDecorationLine: 'line-through' },
   toggleTrack: {
     width: 36,
@@ -870,10 +726,8 @@ const styles = StyleSheet.create({
   cancelledNote: { color: colors.danger, fontSize: font.small, fontWeight: '700' },
   rowHead: { flexDirection: 'row', paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: colors.border },
   headText: { color: colors.textFaint, fontSize: font.tiny, fontWeight: '700' },
-  itemRow: { flexDirection: 'row', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: colors.border },
   itemBlock: { paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: colors.border },
   itemRowInner: { flexDirection: 'row' },
-  whoTextMuted: { color: colors.textFaint, fontSize: font.tiny, fontStyle: 'italic', marginTop: 2 },
   whoWrap: { marginTop: 2 },
   whoToggle: { color: colors.textMuted, fontSize: font.tiny, fontWeight: '600' },
   whoGroupLine: { color: colors.textMuted, fontSize: font.tiny, marginTop: 1, marginLeft: 2 },

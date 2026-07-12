@@ -1,7 +1,10 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Share from 'react-native-share';
+import ReactNativeBlobUtil from 'react-native-blob-util';
 import { buildVendorWeekXlsxBase64, type ExportDay } from '../../utils/vendorWeekExport';
+
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 import { useFocusEffect } from '@react-navigation/native';
 import { Screen } from '../../ui/Screen';
 import { Button, Card, Loader } from '../../ui';
@@ -175,11 +178,16 @@ export function VendorWeekScreen() {
         };
       });
       const base64 = buildVendorWeekXlsxBase64(exportDays);
+      // Write to a real file, then share its path — react-native-share converts
+      // the file:// path to a content:// URI via its FileProvider. Sharing a raw
+      // base64 data URI crashes on Android (null Uri.getScheme()).
+      const path = `${ReactNativeBlobUtil.fs.dirs.CacheDir}/vendor-week-${wkStart}.xlsx`;
+      await ReactNativeBlobUtil.fs.writeFile(path, base64, 'base64');
       await Share.open({
         title: `Vendor week ${wkStart} – ${wkEnd}`,
-        filename: `vendor-week-${wkStart}`,
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        url: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64}`,
+        filename: `vendor-week-${wkStart}.xlsx`,
+        type: XLSX_MIME,
+        url: `file://${path}`,
         failOnCancel: false,
       });
     } catch (e) {

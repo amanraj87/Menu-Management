@@ -222,6 +222,8 @@ export const typeDefs = `#graphql
     updateMenuItem(id: ID!, input: UpdateMenuItemInput!): MenuItem!
     deleteMenuItem(id: ID!): Boolean!
     putSelection(input: PutSelectionInput!): Selection!
+    """Admin: overwrite a specific user's selection for a date+meal (bypasses the monthly cap)."""
+    adminSetUserSelection(userId: ID!, date: String!, mealType: MealType!, items: [SelectionItemInput!]!): Selection!
     confirmOrder(date: String!, mealType: MealType!): ConfirmedOrder!
     """Admin: confirm and send to vendor with optional edited items/quantities."""
     confirmOrderWithItems(date: String!, mealType: MealType!, items: [ConfirmedOrderItemInput!]!): ConfirmedOrder!

@@ -29,7 +29,20 @@ export async function aggregatedOrder(
     .collection(COLLECTIONS.selections)
     .find({ date: args.date, mealType: args.mealType })
     .toArray() as SelectionDoc[]
-  const selections = allSelections.filter(s => !optedOutUserIds.has(s.userId.toString()))
+
+  // Only count selections from users that still exist (drop deleted/orphan users)
+  // and who haven't opted out.
+  const candidateUserIds = new Set(allSelections.map((s) => s.userId.toString()))
+  const users = candidateUserIds.size > 0
+    ? await db.collection(COLLECTIONS.users)
+        .find({ _id: { $in: Array.from(candidateUserIds).map((id) => new ObjectId(id)) } })
+        .toArray() as UserDoc[]
+    : []
+  const userMap = new Map(users.map((u) => [u._id.toString(), u]))
+
+  const selections = allSelections.filter(
+    (s) => userMap.has(s.userId.toString()) && !optedOutUserIds.has(s.userId.toString())
+  )
 
   const menuItemIds = new Set<string>()
   for (const s of selections) {
@@ -44,13 +57,6 @@ export async function aggregatedOrder(
     .find({ _id: { $in: Array.from(menuItemIds).map((id) => new ObjectId(id)) } })
     .toArray() as MenuItemDoc[]
   const menuMap = new Map(menuItems.map((m) => [m._id.toString(), m]))
-
-  const userIds = new Set(selections.map((s) => s.userId.toString()))
-  const users = await db
-    .collection(COLLECTIONS.users)
-    .find({ _id: { $in: Array.from(userIds).map((id) => new ObjectId(id)) } })
-    .toArray() as UserDoc[]
-  const userMap = new Map(users.map((u) => [u._id.toString(), u]))
 
   const byItem = new Map<string, { total: number; byUser: Map<string, number> }>()
   for (const sel of selections) {
@@ -101,29 +107,32 @@ export async function aggregatedOrdersForRange(
     .collection(COLLECTIONS.selections)
     .find({ date: { $gte: args.startDate, $lte: args.endDate } })
     .toArray() as SelectionDoc[]
+
+  // Only count selections from users that still exist (drop deleted/orphan users)
+  // and who haven't opted out.
+  const candidateUserIds = new Set(allSelections.map(s => s.userId.toString()))
+  const users = candidateUserIds.size > 0
+    ? await db.collection(COLLECTIONS.users)
+        .find({ _id: { $in: Array.from(candidateUserIds).map(id => new ObjectId(id)) } })
+        .toArray() as UserDoc[]
+    : []
+  const userMap = new Map(users.map(u => [u._id.toString(), u]))
+
   const selections = allSelections.filter(
-    s => !optedOut.has(`${s.date}|${s.mealType}|${s.userId.toString()}`)
+    s => userMap.has(s.userId.toString()) && !optedOut.has(`${s.date}|${s.mealType}|${s.userId.toString()}`)
   )
+  if (selections.length === 0) return []
 
   const menuItemIds = new Set<string>()
-  const userIds = new Set<string>()
   for (const s of selections) {
-    userIds.add(s.userId.toString())
     for (const i of s.items) menuItemIds.add(i.menuItemId.toString())
   }
-  if (selections.length === 0) return []
 
   const menuItems = await db
     .collection(COLLECTIONS.menu_items)
     .find({ _id: { $in: Array.from(menuItemIds).map(id => new ObjectId(id)) } })
     .toArray() as MenuItemDoc[]
   const menuMap = new Map(menuItems.map(m => [m._id.toString(), m]))
-
-  const users = await db
-    .collection(COLLECTIONS.users)
-    .find({ _id: { $in: Array.from(userIds).map(id => new ObjectId(id)) } })
-    .toArray() as UserDoc[]
-  const userMap = new Map(users.map(u => [u._id.toString(), u]))
 
   // Group selections by date+mealType, then aggregate per menu item.
   const byCombo = new Map<string, { date: string; mealType: MealType; byItem: Map<string, { total: number; byUser: Map<string, number> }> }>()
