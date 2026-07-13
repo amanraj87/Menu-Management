@@ -280,3 +280,15 @@ export const MEAL_DONE_STATUS = `
     mealDoneStatus(date: $date, mealType: $mealType) { id userId userName date mealType markedAt }
   }
 `;
+
+export const REGISTER_PUSH_TOKEN = `
+  mutation RegisterPushToken($token: String!, $platform: String!) {
+    registerPushToken(token: $token, platform: $platform)
+  }
+`;
+
+export const UNREGISTER_PUSH_TOKEN = `
+  mutation UnregisterPushToken($token: String!) {
+    unregisterPushToken(token: $token)
+  }
+`;

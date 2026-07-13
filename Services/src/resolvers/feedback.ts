@@ -1,8 +1,15 @@
 import { ObjectId } from 'mongodb'
 import { getDb } from '../db.js'
 import { COLLECTIONS } from '../constants/collections.js'
+import { sendToUsers, userIdsByRole } from '../services/fcm.js'
 import type { ContextUser } from '../types.js'
 import type { FeedbackDoc, UserDoc } from '../types.js'
+
+/** Trim notification body text to a sane push length. */
+function snippet(text: string, max = 120): string {
+  const t = text.trim()
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t
+}
 
 function toFeedback(doc: FeedbackDoc): Record<string, unknown> {
   return {
@@ -77,6 +84,16 @@ export async function confirmFeedback(
     { returnDocument: 'after' }
   ) as FeedbackDoc | null
   if (!result) throw new Error('Feedback not found or already confirmed')
+
+  // V1: the feedback is now visible to vendors — notify them to respond.
+  const vendors = await userIdsByRole('vendor')
+  await sendToUsers(
+    vendors,
+    'New feedback to respond to',
+    snippet(`${result.userName}: ${result.text}`),
+    { type: 'feedback', feedbackId: result._id.toString() },
+  )
+
   return toFeedback(result)
 }
 
@@ -164,5 +181,22 @@ export async function replyToFeedback(
     { returnDocument: 'after' }
   ) as FeedbackDoc | null
   if (!result) throw new Error('Feedback not found or not available to reply')
+
+  // P2: notify the feedback owner that the vendor replied.
+  await sendToUsers(
+    [result.userId],
+    'Vendor replied to your feedback',
+    snippet(reply),
+    { type: 'feedbackReply', feedbackId: result._id.toString() },
+  )
+  // A3: notify admins that a reply happened.
+  const admins = await userIdsByRole('admin')
+  await sendToUsers(
+    admins,
+    'Vendor replied to a feedback',
+    snippet(`${result.userName}'s feedback got a reply.`),
+    { type: 'feedbackReply', feedbackId: result._id.toString() },
+  )
+
   return toFeedback(result)
 }

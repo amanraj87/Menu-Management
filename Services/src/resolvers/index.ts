@@ -9,6 +9,7 @@ import * as mealDone from './mealDone.js'
 import * as mealCancellations from './mealCancellations.js'
 import * as settings from './settings.js'
 import * as vendorDayNotes from './vendorDayNotes.js'
+import * as pushTokens from './pushTokens.js'
 import { runAutoImport } from '../jobs/autoImport.js'
 
 export const resolvers = {
@@ -56,6 +57,8 @@ export const resolvers = {
     updateSettings: settings.updateSettings,
     toggleMealCancellation: mealCancellations.toggleMealCancellation,
     updateVendorDayNote: vendorDayNotes.updateVendorDayNote,
+    registerPushToken: pushTokens.registerPushToken,
+    unregisterPushToken: pushTokens.unregisterPushToken,
     runAutoImport,
   },
 }

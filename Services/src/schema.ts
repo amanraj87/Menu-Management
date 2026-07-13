@@ -250,5 +250,9 @@ export const typeDefs = `#graphql
     updateVendorDayNote(date: String!, finalAmount: Float, comment: String!): VendorDayNote!
     """Admin: manually run the weekly auto-import into the given week (defaults to next week). Returns slots created."""
     runAutoImport(targetWeekStart: String): Int!
+    """Register this device's FCM push token for the signed-in user (upsert by token)."""
+    registerPushToken(token: String!, platform: String!): Boolean!
+    """Remove a device's FCM push token (e.g. on sign-out)."""
+    unregisterPushToken(token: String!): Boolean!
   }
 `

@@ -1,6 +1,7 @@
 import { ObjectId } from 'mongodb'
 import { getDb } from '../db.js'
 import { COLLECTIONS } from '../constants/collections.js'
+import { sendToUsers, userIdsByRole } from '../services/fcm.js'
 import type { VendorDayNoteDoc, ContextUser } from '../types.js'
 
 function toNote(doc: VendorDayNoteDoc) {
@@ -50,5 +51,21 @@ export async function updateVendorDayNote(
     },
     { upsert: true, returnDocument: 'after' },
   )
+
+  // A1: only a VENDOR setting the final amount notifies admins (an admin editing
+  // it themselves shouldn't self-notify).
+  if (user.role === 'vendor') {
+    const admins = await userIdsByRole('admin')
+    const amount = args.finalAmount ?? null
+    const body =
+      amount != null
+        ? `${args.date}: final amount set to ₹${amount}`
+        : `${args.date}: final amount updated`
+    await sendToUsers(admins, 'Vendor set a day’s final amount', body, {
+      type: 'vendorDayNote',
+      date: args.date,
+    })
+  }
+
   return toNote(result as unknown as VendorDayNoteDoc)
 }

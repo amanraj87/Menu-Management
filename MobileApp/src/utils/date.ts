@@ -121,3 +121,14 @@ export function formatDateTime(value?: string): string {
 export function isToday(iso: string): boolean {
   return iso === todayISO();
 }
+
+/** True if the given ISO date falls on Saturday or Sunday. */
+export function isWeekend(iso: string): boolean {
+  const day = parseISO(iso).getDay(); // 0 = Sun ... 6 = Sat
+  return day === 0 || day === 6;
+}
+
+/** True if the current local day is Saturday or Sunday. */
+export function isWeekendToday(): boolean {
+  return isWeekend(todayISO());
+}

@@ -13,6 +13,7 @@ export const COLLECTIONS = {
   settings: 'settings',
   vendor_day_notes: 'vendor_day_notes',
   job_runs: 'job_runs',
+  push_tokens: 'push_tokens',
 } as const
 
 export type CollectionName = keyof typeof COLLECTIONS

@@ -23,6 +23,7 @@ import {
   dayShort,
   formatShort,
   isToday,
+  isWeekendToday,
   todayISO,
   weekDays,
   weekStart,
@@ -97,6 +98,13 @@ const toggleStyles = StyleSheet.create({
 function canToggleMeal(date: string): boolean {
   const today = todayISO();
   return date > today;
+}
+
+// Item add / delete / quantity changes are only allowed on the weekend
+// (Sat/Sun), and only for upcoming days. The on/off toggle is unaffected —
+// it stays available any day via canToggleMeal.
+function canEditItems(date: string): boolean {
+  return isWeekendToday() && date > todayISO();
 }
 
 export function PersonWeekScreen() {
@@ -313,6 +321,7 @@ export function PersonWeekScreen() {
             icon="↻"
             variant="ghost"
             loading={importing}
+            disabled={!isWeekendToday()}
             onPress={importLastWeek}
           />
         </View>
@@ -353,6 +362,7 @@ export function PersonWeekScreen() {
           const meta = mealMeta[meal];
           const optedOut = isMealOptedOut(activeDay, meal);
           const toggleEnabled = canToggleMeal(activeDay);
+          const itemsEditable = canEditItems(activeDay);
           return (
             <Card key={meal} padded={false} style={optedOut ? styles.cardOptedOut : undefined}>
               <View style={styles.mealHeader}>
@@ -390,20 +400,28 @@ export function PersonWeekScreen() {
                         </View>
                         <Stepper
                           value={r.qty}
+                          disabled={!itemsEditable}
                           onChange={v => setQty(activeDay, meal, r.itemId, v)}
                         />
                       </View>
                     ))
                   )}
 
-                  <Pressable
-                    style={styles.addRow}
-                    onPress={() => {
-                      setSearch('');
-                      setSheetMeal(meal);
-                    }}>
-                    <Text style={styles.addText}>＋ Add an item</Text>
-                  </Pressable>
+                  {itemsEditable ? (
+                    <Pressable
+                      style={styles.addRow}
+                      onPress={() => {
+                        setSearch('');
+                        setSheetMeal(meal);
+                      }}>
+                      <Text style={styles.addText}>＋ Add an item</Text>
+                    </Pressable>
+                  ) : (
+                    <Text style={styles.lockHint}>
+                      🔒 Items can only be changed on the weekend. You can still
+                      turn a meal on/off any day.
+                    </Text>
+                  )}
                 </>
               )}
             </Card>
@@ -591,6 +609,14 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   addText: { color: colors.primary, fontSize: font.small, fontWeight: '700' },
+  lockHint: {
+    color: colors.textFaint,
+    fontSize: font.small,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
 
   sheetList: { marginTop: spacing.sm },
   sheetItem: {

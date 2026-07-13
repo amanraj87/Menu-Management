@@ -105,6 +105,14 @@ export interface VendorDayNoteDoc {
   updatedAt: Date
 }
 
+export interface PushTokenDoc {
+  _id: ObjectId
+  token: string
+  userId: ObjectId
+  platform: string
+  updatedAt: Date
+}
+
 export interface SettingsDoc {
   _id: ObjectId
   monthlyMealCap: number | null

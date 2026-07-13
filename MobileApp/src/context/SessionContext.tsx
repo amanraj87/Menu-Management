@@ -9,6 +9,11 @@ import React, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SESSION_STORAGE_KEY } from '../config';
 import { setAuthUserId } from '../api/client';
+import {
+  scheduleWeeklyPlanReminder,
+  cancelWeeklyPlanReminder,
+} from '../services/notifications';
+import { registerPushToken, unregisterPushToken } from '../services/push';
 import type { UserSession } from '../types';
 
 interface SessionContextValue {
@@ -42,6 +47,28 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       }
     })();
   }, []);
+
+  // Notification lifecycle. Runs after hydration so we don't churn on launch.
+  const role = session?.role;
+  const userId = session?.userId;
+  useEffect(() => {
+    if (!hydrated) return;
+
+    // Remote push (FCM): register this device's token for the signed-in user
+    // (any role), unregister on sign-out.
+    if (userId) {
+      registerPushToken().catch(() => {});
+    } else {
+      unregisterPushToken().catch(() => {});
+    }
+
+    // P1 local reminder: only while a person is signed in.
+    if (role === 'person') {
+      scheduleWeeklyPlanReminder().catch(() => {});
+    } else {
+      cancelWeeklyPlanReminder().catch(() => {});
+    }
+  }, [hydrated, role, userId]);
 
   const signIn = useCallback(async (next: UserSession) => {
     setAuthUserId(next.userId);

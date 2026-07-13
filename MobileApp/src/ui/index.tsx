@@ -259,11 +259,13 @@ export function Stepper({
   onChange,
   step = 1,
   min = 0,
+  disabled = false,
 }: {
   value: number;
   onChange: (v: number) => void;
   step?: number;
   min?: number;
+  disabled?: boolean;
 }) {
   // Local draft so partial input like "0." or "0.2" can be typed without the
   // parent committing an intermediate value (which could drop the item at 0).
@@ -295,14 +297,17 @@ export function Stepper({
   };
 
   return (
-    <View style={styles.stepper}>
+    <View style={[styles.stepper, disabled && styles.stepperDisabled]}>
       <Pressable
         onPress={dec}
         style={styles.stepBtn}
         hitSlop={6}
-        disabled={value <= min}>
+        disabled={disabled || value <= min}>
         <Text
-          style={[styles.stepBtnText, value <= min && styles.stepBtnDisabled]}>
+          style={[
+            styles.stepBtnText,
+            (disabled || value <= min) && styles.stepBtnDisabled,
+          ]}>
           −
         </Text>
       </Pressable>
@@ -312,13 +317,20 @@ export function Stepper({
         onChangeText={handleText}
         onEndEditing={commit}
         onBlur={commit}
+        editable={!disabled}
         keyboardType="decimal-pad"
         selectTextOnFocus
         returnKeyType="done"
         maxLength={6}
       />
-      <Pressable onPress={inc} style={styles.stepBtn} hitSlop={6}>
-        <Text style={styles.stepBtnText}>+</Text>
+      <Pressable
+        onPress={inc}
+        style={styles.stepBtn}
+        hitSlop={6}
+        disabled={disabled}>
+        <Text style={[styles.stepBtnText, disabled && styles.stepBtnDisabled]}>
+          +
+        </Text>
       </Pressable>
     </View>
   );
@@ -484,6 +496,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  stepperDisabled: { opacity: 0.45 },
   stepBtn: {
     width: 34,
     height: 34,

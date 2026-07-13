@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "142452321256",
+    "project_id": "foodos-8b6d2",
+    "storage_bucket": "foodos-8b6d2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:142452321256:android:3fc054ee695417e18b925d",
+        "android_client_info": {
+          "package_name": "com.foodops"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAOhCJHV2vsevZH2Ve-wd7FmXnvQAsunb0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

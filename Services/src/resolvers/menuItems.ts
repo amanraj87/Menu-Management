@@ -1,6 +1,7 @@
 import { ObjectId } from 'mongodb'
 import { getDb } from '../db.js'
 import { COLLECTIONS } from '../constants/collections.js'
+import { sendToUsers, userIdsByRole } from '../services/fcm.js'
 import type { ContextUser } from '../types.js'
 import type { MealType } from '../types.js'
 import type { MenuItemDoc } from '../types.js'
@@ -62,17 +63,38 @@ export async function updateMenuItem(
   if (!context.user || context.user.role !== 'vendor') throw new Error('Only vendor can add or edit menu items')
   const db = getDb()
   if (!ObjectId.isValid(args.id)) return null
+  const _id = new ObjectId(args.id)
+  const existing = (await db
+    .collection(COLLECTIONS.menu_items)
+    .findOne({ _id })) as MenuItemDoc | null
   const update: Record<string, unknown> = { updatedAt: new Date() }
   if (args.input.name !== undefined) update.name = args.input.name
   if (args.input.mealType !== undefined) update.mealType = args.input.mealType
   if (args.input.unit !== undefined) update.unit = args.input.unit
   if (args.input.pricePerUnit !== undefined) update.pricePerUnit = args.input.pricePerUnit
   const result = await db.collection(COLLECTIONS.menu_items).findOneAndUpdate(
-    { _id: new ObjectId(args.id) },
+    { _id },
     { $set: update },
     { returnDocument: 'after' }
   )
-  return toMenuItem(result as MenuItemDoc | null)
+  const updated = result as MenuItemDoc | null
+
+  // A2: notify admins only when the price actually changed (not on name/unit edits).
+  if (
+    updated &&
+    args.input.pricePerUnit !== undefined &&
+    existing?.pricePerUnit !== updated.pricePerUnit
+  ) {
+    const admins = await userIdsByRole('admin')
+    await sendToUsers(
+      admins,
+      'Vendor changed a meal price',
+      `${updated.name} is now ₹${updated.pricePerUnit}`,
+      { type: 'menuPrice', menuItemId: args.id },
+    )
+  }
+
+  return toMenuItem(updated)
 }
 
 export async function deleteMenuItem(_: unknown, args: { id: string }, context: { user?: ContextUser }): Promise<boolean> {
