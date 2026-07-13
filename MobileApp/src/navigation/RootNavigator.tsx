@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { navigationRef, flushPendingNavigation } from './navigationRef';
 import { useSession } from '../context/SessionContext';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { PersonTabs } from './PersonTabs';
@@ -36,7 +37,10 @@ export function RootNavigator() {
   }
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer
+      ref={navigationRef}
+      theme={navTheme}
+      onReady={flushPendingNavigation}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!session ? (
           <Stack.Screen name="Login" component={LoginScreen} />

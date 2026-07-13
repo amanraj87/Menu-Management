@@ -17,17 +17,21 @@ import {
   getToken,
   onMessage,
   onTokenRefresh,
+  onNotificationOpenedApp,
+  getInitialNotification,
   requestPermission,
   AuthorizationStatus,
 } from '@react-native-firebase/messaging';
-import notifee, { AndroidImportance } from '@notifee/react-native';
+import notifee, { AndroidImportance, EventType } from '@notifee/react-native';
 import { gqlRequest } from '../api/client';
 import { REGISTER_PUSH_TOKEN, UNREGISTER_PUSH_TOKEN } from '../api/operations';
+import { routeFromNotificationData } from '../navigation/navigationRef';
 
 export const REMOTE_CHANNEL_ID = 'remote-alerts';
 
 let unsubMessage: (() => void) | null = null;
 let unsubRefresh: (() => void) | null = null;
+let routingReady = false;
 let lastToken: string | null = null;
 
 /** Create the Android channel used to display remote alerts. */
@@ -52,6 +56,7 @@ export async function displayRemoteMessage(message: {
   await notifee.displayNotification({
     title,
     body,
+    data: message.data ?? {},
     android: {
       channelId,
       pressAction: { id: 'default' },
@@ -96,6 +101,47 @@ export async function registerPushToken(): Promise<void> {
       await pushToken(next);
     });
   }
+
+  initNotificationRouting();
+}
+
+/**
+ * Wire notification-tap → navigation for every entry path:
+ *  - foreground tap on a notifee-displayed notification
+ *  - background tap on an OS-displayed FCM notification (app was running)
+ *  - cold-start tap that launched the app (FCM + notifee)
+ * Idempotent; safe to call more than once.
+ */
+export function initNotificationRouting(): void {
+  if (routingReady) return;
+  routingReady = true;
+  const messaging = getMessaging(getApp());
+
+  // Foreground: a notifee notification (FCM foreground display or the local
+  // P1 reminder) was tapped.
+  notifee.onForegroundEvent(({ type, detail }) => {
+    if (type === EventType.PRESS) {
+      routeFromNotificationData(detail.notification?.data as any);
+    }
+  });
+
+  // App was in the background and an OS-displayed FCM notification was tapped.
+  onNotificationOpenedApp(messaging, remoteMessage => {
+    routeFromNotificationData(remoteMessage?.data as any);
+  });
+
+  // App was launched from a quit state by tapping a notification.
+  getInitialNotification(messaging)
+    .then(remoteMessage => {
+      if (remoteMessage) routeFromNotificationData(remoteMessage.data as any);
+    })
+    .catch(() => {});
+  notifee
+    .getInitialNotification()
+    .then(initial => {
+      if (initial) routeFromNotificationData(initial.notification?.data as any);
+    })
+    .catch(() => {});
 }
 
 /** Remove this device's token from the backend (call on sign-out). */

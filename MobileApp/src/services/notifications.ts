@@ -76,6 +76,7 @@ export async function scheduleWeeklyPlanReminder(): Promise<void> {
       id: REMINDER_ID,
       title: 'Meal selection closes soon',
       body: 'This is your weekend to plan next week — finalize your items before it locks.',
+      data: { type: 'planWeek' },
       android: {
         channelId,
         pressAction: { id: 'default' },
