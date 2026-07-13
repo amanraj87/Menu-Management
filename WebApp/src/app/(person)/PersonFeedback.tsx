@@ -1,11 +1,18 @@
 import { useState } from 'react'
-import { Card, Button } from '@/shared/ui'
-import { useCreateFeedback } from '@/shared/graphql/hooks'
+import { Card, Button, FeedbackBubbles } from '@/shared/ui'
+import { useCreateFeedback, useMyFeedbacks } from '@/shared/graphql/hooks'
 import { useToastStore } from '@/shared/stores/toastStore'
+
+const STATUS_LABEL: Record<string, string> = {
+  pending: 'Awaiting admin review',
+  confirmed: 'Shared with vendor',
+  rejected: 'Not taken up',
+}
 
 export function PersonFeedback() {
   const [text, setText] = useState('')
   const toast = useToastStore()
+  const { feedbacks } = useMyFeedbacks()
   const { createFeedback, isPending } = useCreateFeedback(
     () => {
       setText('')
@@ -43,6 +50,24 @@ export function PersonFeedback() {
           {isPending ? 'Submitting…' : 'Submit'}
         </Button>
       </form>
+
+      {feedbacks.length > 0 && (
+        <div style={{ marginTop: '1.5rem' }}>
+          <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem' }}>Your feedback</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {feedbacks.map((f) => (
+              <div key={f._id} style={{ border: '1px solid var(--color-border)', borderRadius: 14, background: 'var(--color-bg)', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                <FeedbackBubbles feedback={f} viewer="user" />
+                {!f.vendorReply && (
+                  <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', textAlign: 'right' }}>
+                    {STATUS_LABEL[f.status] ?? f.status}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </Card>
   )
 }

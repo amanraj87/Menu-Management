@@ -13,6 +13,8 @@ function toFeedback(doc: FeedbackDoc): Record<string, unknown> {
     status: doc.status,
     createdAt: doc.createdAt.toISOString(),
     confirmedAt: doc.confirmedAt?.toISOString() ?? null,
+    vendorReply: doc.vendorReply ?? null,
+    vendorReplyAt: doc.vendorReplyAt?.toISOString() ?? null,
   }
 }
 
@@ -112,4 +114,55 @@ export async function confirmedFeedbacks(
     .sort({ confirmedAt: -1 })
     .toArray() as FeedbackDoc[]
   return list.map(toFeedback)
+}
+
+export async function deleteFeedback(
+  _: unknown,
+  args: { id: string },
+  context: { user?: ContextUser }
+): Promise<boolean> {
+  const user = context.user
+  if (!user || user.role !== 'admin') throw new Error('Unauthorized: admin role required')
+
+  const db = getDb()
+  const result = await db.collection(COLLECTIONS.feedback).deleteOne({ _id: new ObjectId(args.id) })
+  if (result.deletedCount === 0) throw new Error('Feedback not found')
+  return true
+}
+
+export async function myFeedbacks(
+  _: unknown,
+  __: unknown,
+  context: { user?: ContextUser }
+): Promise<Record<string, unknown>[]> {
+  const user = context.user
+  if (!user) throw new Error('Unauthorized: login required')
+
+  const db = getDb()
+  const list = await db
+    .collection(COLLECTIONS.feedback)
+    .find({ userId: new ObjectId(user.userId) })
+    .sort({ createdAt: -1 })
+    .toArray() as FeedbackDoc[]
+  return list.map(toFeedback)
+}
+
+export async function replyToFeedback(
+  _: unknown,
+  args: { id: string; reply: string },
+  context: { user?: ContextUser }
+): Promise<Record<string, unknown>> {
+  const user = context.user
+  if (!user || user.role !== 'vendor') throw new Error('Unauthorized: vendor role required')
+  const reply = (args.reply ?? '').trim()
+  if (!reply) throw new Error('Reply text is required')
+
+  const db = getDb()
+  const result = await db.collection(COLLECTIONS.feedback).findOneAndUpdate(
+    { _id: new ObjectId(args.id), status: 'confirmed' },
+    { $set: { vendorReply: reply, vendorReplyBy: new ObjectId(user.userId), vendorReplyAt: new Date() } },
+    { returnDocument: 'after' }
+  ) as FeedbackDoc | null
+  if (!result) throw new Error('Feedback not found or not available to reply')
+  return toFeedback(result)
 }

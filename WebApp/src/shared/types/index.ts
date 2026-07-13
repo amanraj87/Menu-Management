@@ -79,4 +79,6 @@ export interface Feedback {
   status: 'pending' | 'confirmed' | 'rejected'
   createdAt: string
   confirmedAt?: string
+  vendorReply?: string
+  vendorReplyAt?: string
 }

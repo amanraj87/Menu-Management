@@ -111,6 +111,8 @@ export const typeDefs = `#graphql
     status: String!
     createdAt: String!
     confirmedAt: String
+    vendorReply: String
+    vendorReplyAt: String
   }
 
   enum UserRole {
@@ -210,6 +212,8 @@ export const typeDefs = `#graphql
     feedbacksForAdmin: [Feedback!]!
     """Vendor: only confirmed feedbacks."""
     confirmedFeedbacks: [Feedback!]!
+    """Current user's own submitted feedback (with any vendor reply)."""
+    myFeedbacks: [Feedback!]!
   }
 
   # Mutations
@@ -234,6 +238,10 @@ export const typeDefs = `#graphql
     createFeedback(input: CreateFeedbackInput!): Feedback!
     confirmFeedback(id: ID!): Feedback!
     rejectFeedback(id: ID!): Feedback!
+    """Admin: permanently delete a feedback."""
+    deleteFeedback(id: ID!): Boolean!
+    """Vendor: reply to a confirmed feedback. Visible to the admin and the user who submitted it."""
+    replyToFeedback(id: ID!, reply: String!): Feedback!
     """Admin: update app settings. Pass the fields to change (monthly cap, delivery charge; null clears)."""
     updateSettings(monthlyMealCap: Float, deliveryCharge: Float): Settings!
     """Vendor/admin: cancel or restore a meal for a specific date."""

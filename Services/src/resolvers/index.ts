@@ -33,6 +33,7 @@ export const resolvers = {
     vendorDayNotesForRange: vendorDayNotes.vendorDayNotesForRange,
     feedbacksForAdmin: feedback.feedbacksForAdmin,
     confirmedFeedbacks: feedback.confirmedFeedbacks,
+    myFeedbacks: feedback.myFeedbacks,
   },
   Mutation: {
     signUp: users.signUp,
@@ -50,6 +51,8 @@ export const resolvers = {
     createFeedback: feedback.createFeedback,
     confirmFeedback: feedback.confirmFeedback,
     rejectFeedback: feedback.rejectFeedback,
+    replyToFeedback: feedback.replyToFeedback,
+    deleteFeedback: feedback.deleteFeedback,
     updateSettings: settings.updateSettings,
     toggleMealCancellation: mealCancellations.toggleMealCancellation,
     updateVendorDayNote: vendorDayNotes.updateVendorDayNote,

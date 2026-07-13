@@ -11,6 +11,7 @@ import {
   CONFIRMED_ORDERS,
   FEEDBACKS_FOR_ADMIN,
   CONFIRMED_FEEDBACKS,
+  MY_FEEDBACKS,
   CONFIRMED_ORDERS_FOR_RANGE,
   GET_SETTINGS,
   WEEKLY_EXPENSE,
@@ -135,6 +136,8 @@ const toFeedback = (g: any): Feedback => ({
   status: g.status,
   createdAt: g.createdAt,
   confirmedAt: g.confirmedAt ?? undefined,
+  vendorReply: g.vendorReply ?? undefined,
+  vendorReplyAt: g.vendorReplyAt ?? undefined,
 });
 
 /* ------------------------------------------------------------------ */
@@ -258,6 +261,11 @@ export function useFeedbacksForAdmin() {
 export function useConfirmedFeedbacks() {
   const q = useGqlQuery<{ confirmedFeedbacks: any[] }>(CONFIRMED_FEEDBACKS);
   return { feedbacks: (q.data?.confirmedFeedbacks ?? []).map(toFeedback), ...q };
+}
+
+export function useMyFeedbacks() {
+  const q = useGqlQuery<{ myFeedbacks: any[] }>(MY_FEEDBACKS);
+  return { feedbacks: (q.data?.myFeedbacks ?? []).map(toFeedback), ...q };
 }
 
 export function useConfirmedOrdersForRange(startDate: string, endDate: string) {

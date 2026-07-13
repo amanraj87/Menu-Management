@@ -23,6 +23,9 @@ import {
   CONFIRM_FEEDBACK,
   REJECT_FEEDBACK,
   CONFIRMED_FEEDBACKS,
+  MY_FEEDBACKS,
+  REPLY_TO_FEEDBACK,
+  DELETE_FEEDBACK,
   MY_MEAL_OPT_OUTS,
   TOGGLE_MEAL_OPT_OUT,
   MY_MEAL_DONE_FOR_WEEK,
@@ -274,7 +277,7 @@ export function useCreateFeedback(onSuccess?: () => void, onError?: (e: Error) =
   const client = useApolloClient()
   const [mutate, result] = useMutation<{ createFeedback: { id: string; userId: string; userName: string; text: string; status: string; createdAt: string; confirmedAt?: string | null } }>(CREATE_FEEDBACK, {
     onCompleted: () => {
-      void client.refetchQueries({ include: [FEEDBACKS_FOR_ADMIN] })
+      void client.refetchQueries({ include: [FEEDBACKS_FOR_ADMIN, MY_FEEDBACKS] })
       onSuccess?.()
     },
     onError: (e: Error) => onError?.(e),
@@ -325,11 +328,50 @@ export function useRejectFeedback(onSuccess?: () => void, onError?: (e: Error) =
   }
 }
 
-interface ConfirmedFeedbacksData { confirmedFeedbacks: Array<{ id: string; userId: string; userName: string; text: string; status: string; createdAt: string; confirmedAt?: string | null }> }
+interface ConfirmedFeedbacksData { confirmedFeedbacks: Array<{ id: string; userId: string; userName: string; text: string; status: string; createdAt: string; confirmedAt?: string | null; vendorReply?: string | null; vendorReplyAt?: string | null }> }
 export function useConfirmedFeedbacks() {
   const { data, loading, error } = useQuery<ConfirmedFeedbacksData>(CONFIRMED_FEEDBACKS)
   const feedbacks = (data?.confirmedFeedbacks ?? []).map(toFeedback)
   return { feedbacks, isLoading: loading, error }
+}
+
+interface MyFeedbacksData { myFeedbacks: Array<{ id: string; userId: string; userName: string; text: string; status: string; createdAt: string; confirmedAt?: string | null; vendorReply?: string | null; vendorReplyAt?: string | null }> }
+export function useMyFeedbacks() {
+  const { data, loading, error } = useQuery<MyFeedbacksData>(MY_FEEDBACKS, { fetchPolicy: 'cache-and-network' })
+  const feedbacks = (data?.myFeedbacks ?? []).map(toFeedback)
+  return { feedbacks, isLoading: loading, error }
+}
+
+export function useDeleteFeedback(onSuccess?: () => void, onError?: (e: Error) => void) {
+  const client = useApolloClient()
+  const [mutate, result] = useMutation(DELETE_FEEDBACK, {
+    onCompleted: () => {
+      void client.refetchQueries({ include: [FEEDBACKS_FOR_ADMIN, CONFIRMED_FEEDBACKS, MY_FEEDBACKS] })
+      onSuccess?.()
+    },
+    onError: (e: Error) => onError?.(e),
+  })
+  return {
+    deleteFeedback: (id: string) => mutate({ variables: { id } }),
+    isPending: result.loading,
+    error: result.error,
+  }
+}
+
+export function useReplyToFeedback(onSuccess?: () => void, onError?: (e: Error) => void) {
+  const client = useApolloClient()
+  const [mutate, result] = useMutation(REPLY_TO_FEEDBACK, {
+    onCompleted: () => {
+      void client.refetchQueries({ include: [CONFIRMED_FEEDBACKS, FEEDBACKS_FOR_ADMIN, MY_FEEDBACKS] })
+      onSuccess?.()
+    },
+    onError: (e: Error) => onError?.(e),
+  })
+  return {
+    replyToFeedback: (id: string, reply: string) => mutate({ variables: { id, reply } }),
+    isPending: result.loading,
+    error: result.error,
+  }
 }
 
 interface MealOptOutsData { myMealOptOuts: { id: string; userId: string; date: string; mealType: string }[] }

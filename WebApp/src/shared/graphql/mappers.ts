@@ -84,7 +84,7 @@ export function toConfirmedOrder(g: {
   }
 }
 
-export function toFeedback(g: { id: string; userId: string; userName: string; text: string; status: string; createdAt: string; confirmedAt?: string | null }): Feedback {
+export function toFeedback(g: { id: string; userId: string; userName: string; text: string; status: string; createdAt: string; confirmedAt?: string | null; vendorReply?: string | null; vendorReplyAt?: string | null }): Feedback {
   return {
     _id: g.id,
     userId: g.userId,
@@ -93,5 +93,7 @@ export function toFeedback(g: { id: string; userId: string; userName: string; te
     status: g.status as Feedback['status'],
     createdAt: g.createdAt,
     confirmedAt: g.confirmedAt ?? undefined,
+    vendorReply: g.vendorReply ?? undefined,
+    vendorReplyAt: g.vendorReplyAt ?? undefined,
   }
 }

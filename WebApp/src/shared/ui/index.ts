@@ -1,6 +1,7 @@
 export { Badge } from './Badge'
 export { Button } from './Button'
 export { Card } from './Card'
+export { FeedbackBubbles } from './FeedbackBubbles'
 export { Header } from './Header'
 export { Input } from './Input'
 export { Layout } from './Layout'

@@ -276,6 +276,8 @@ export const FEEDBACKS_FOR_ADMIN = gql`
       status
       createdAt
       confirmedAt
+      vendorReply
+      vendorReplyAt
     }
   }
 `
@@ -318,6 +320,46 @@ export const CONFIRMED_FEEDBACKS = gql`
       status
       createdAt
       confirmedAt
+      vendorReply
+      vendorReplyAt
+    }
+  }
+`
+
+export const DELETE_FEEDBACK = gql`
+  mutation DeleteFeedback($id: ID!) {
+    deleteFeedback(id: $id)
+  }
+`
+
+export const MY_FEEDBACKS = gql`
+  query MyFeedbacks {
+    myFeedbacks {
+      id
+      userId
+      userName
+      text
+      status
+      createdAt
+      confirmedAt
+      vendorReply
+      vendorReplyAt
+    }
+  }
+`
+
+export const REPLY_TO_FEEDBACK = gql`
+  mutation ReplyToFeedback($id: ID!, $reply: String!) {
+    replyToFeedback(id: $id, reply: $reply) {
+      id
+      userId
+      userName
+      text
+      status
+      createdAt
+      confirmedAt
+      vendorReply
+      vendorReplyAt
     }
   }
 `

@@ -67,6 +67,9 @@ export interface FeedbackDoc {
   createdAt: Date
   confirmedBy?: ObjectId
   confirmedAt?: Date
+  vendorReply?: string
+  vendorReplyBy?: ObjectId
+  vendorReplyAt?: Date
 }
 
 export interface MealOptOutDoc {

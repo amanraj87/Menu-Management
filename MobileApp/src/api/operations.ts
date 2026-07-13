@@ -136,7 +136,7 @@ export const CREATE_FEEDBACK = `
 
 export const FEEDBACKS_FOR_ADMIN = `
   query FeedbacksForAdmin {
-    feedbacksForAdmin { id userId userName text status createdAt confirmedAt }
+    feedbacksForAdmin { id userId userName text status createdAt confirmedAt vendorReply vendorReplyAt }
   }
 `;
 
@@ -158,7 +158,27 @@ export const REJECT_FEEDBACK = `
 
 export const CONFIRMED_FEEDBACKS = `
   query ConfirmedFeedbacks {
-    confirmedFeedbacks { id userId userName text status createdAt confirmedAt }
+    confirmedFeedbacks { id userId userName text status createdAt confirmedAt vendorReply vendorReplyAt }
+  }
+`;
+
+export const DELETE_FEEDBACK = `
+  mutation DeleteFeedback($id: ID!) {
+    deleteFeedback(id: $id)
+  }
+`;
+
+export const MY_FEEDBACKS = `
+  query MyFeedbacks {
+    myFeedbacks { id userId userName text status createdAt confirmedAt vendorReply vendorReplyAt }
+  }
+`;
+
+export const REPLY_TO_FEEDBACK = `
+  mutation ReplyToFeedback($id: ID!, $reply: String!) {
+    replyToFeedback(id: $id, reply: $reply) {
+      id userId userName text status createdAt confirmedAt vendorReply vendorReplyAt
+    }
   }
 `;
 
