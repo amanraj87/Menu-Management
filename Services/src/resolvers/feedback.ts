@@ -48,6 +48,16 @@ export async function createFeedback(
   }
   const result = await db.collection(COLLECTIONS.feedback).insertOne(doc as FeedbackDoc)
   const inserted = await db.collection(COLLECTIONS.feedback).findOne({ _id: result.insertedId }) as FeedbackDoc
+
+  // Notify admins so they know there's new feedback to confirm.
+  const admins = await userIdsByRole('admin')
+  await sendToUsers(
+    admins,
+    'New feedback to review',
+    snippet(`${userName}: ${text}`),
+    { type: 'feedbackNew', feedbackId: inserted._id.toString() },
+  )
+
   return toFeedback(inserted)
 }
 
