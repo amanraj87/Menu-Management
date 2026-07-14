@@ -468,6 +468,7 @@ export const VENDOR_DAY_NOTES_FOR_RANGE = gql`
       date
       finalAmount
       comment
+      adminComment
       updatedAt
     }
   }
@@ -480,6 +481,20 @@ export const UPDATE_VENDOR_DAY_NOTE = gql`
       date
       finalAmount
       comment
+      adminComment
+      updatedAt
+    }
+  }
+`
+
+export const UPDATE_ADMIN_DAY_COMMENT = gql`
+  mutation UpdateAdminDayComment($date: String!, $comment: String!) {
+    updateAdminDayComment(date: $date, comment: $comment) {
+      id
+      date
+      finalAmount
+      comment
+      adminComment
       updatedAt
     }
   }

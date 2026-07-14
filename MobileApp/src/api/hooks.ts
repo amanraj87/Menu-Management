@@ -320,6 +320,7 @@ export interface VendorDayNote {
   date: string;
   finalAmount: number | null;
   comment: string;
+  adminComment: string;
   updatedAt: string | null;
 }
 

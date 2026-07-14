@@ -57,8 +57,8 @@ export function VendorWeekScreen() {
 
   const { notes, refetch: refetchNotes } = useVendorDayNotesForRange(wkStart, wkEnd);
   const notesByDate = useMemo(() => {
-    const map: Record<string, { finalAmount: number | null; comment: string }> = {};
-    notes.forEach(n => { map[n.date] = { finalAmount: n.finalAmount, comment: n.comment }; });
+    const map: Record<string, { finalAmount: number | null; comment: string; adminComment: string }> = {};
+    notes.forEach(n => { map[n.date] = { finalAmount: n.finalAmount, comment: n.comment, adminComment: n.adminComment }; });
     return map;
   }, [notes]);
 
@@ -264,9 +264,14 @@ export function VendorWeekScreen() {
               </Pressable>
 
               {collapsed ? (
-                note?.comment ? (
+                (note?.comment || note?.adminComment) ? (
                   <View style={styles.collapsedComment}>
-                    <Text style={styles.collapsedCommentText}>{note.comment}</Text>
+                    {note?.comment ? (
+                      <Text style={styles.collapsedCommentText}>{note.comment}</Text>
+                    ) : null}
+                    {note?.adminComment ? (
+                      <Text style={styles.collapsedCommentText}>Admin: {note.adminComment}</Text>
+                    ) : null}
                   </View>
                 ) : null
               ) : (
@@ -359,6 +364,9 @@ export function VendorWeekScreen() {
                     <View style={styles.noteRow}>
                       <View style={{ flex: 1 }}>
                         {note?.comment ? <Text style={styles.commentText}>{note.comment}</Text> : null}
+                        {note?.adminComment ? (
+                          <Text style={styles.adminReplyText}>Admin: {note.adminComment}</Text>
+                        ) : null}
                         {hasOverride && <Text style={styles.overrideHint}>calc: ₹{Math.round(calcTotal)}</Text>}
                       </View>
                       <Pressable onPress={() => openEdit(date, calcTotal)} hitSlop={6} style={styles.editBtn}>
@@ -493,6 +501,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   commentText: { color: colors.textMuted, fontSize: font.small, fontStyle: 'italic' },
+  adminReplyText: { color: colors.primary, fontSize: font.small, fontStyle: 'italic', marginTop: 2 },
   overrideHint: { color: colors.textFaint, fontSize: font.tiny, marginTop: 2 },
   editBtn: {
     paddingHorizontal: spacing.md,

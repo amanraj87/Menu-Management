@@ -39,6 +39,7 @@ import {
   TOGGLE_MEAL_CANCELLATION,
   VENDOR_DAY_NOTES_FOR_RANGE,
   UPDATE_VENDOR_DAY_NOTE,
+  UPDATE_ADMIN_DAY_COMMENT,
 } from './operations'
 import { toUser, toMenuItem, toSelection, toAggregatedOrder, toConfirmedOrder, toFeedback } from './mappers'
 import type { MealType, UserRole } from '@/shared/types'
@@ -474,7 +475,7 @@ export function useToggleMealCancellation() {
 }
 
 interface VendorDayNoteData {
-  vendorDayNotesForRange: Array<{ id: string; date: string; finalAmount: number | null; comment: string; updatedAt: string | null }>
+  vendorDayNotesForRange: Array<{ id: string; date: string; finalAmount: number | null; comment: string; adminComment: string; updatedAt: string | null }>
 }
 
 export function useVendorDayNotesForRange(startDate: string, endDate: string) {
@@ -489,6 +490,14 @@ export function useUpdateVendorDayNote() {
   const [mutate, { loading }] = useMutation(UPDATE_VENDOR_DAY_NOTE)
   return {
     update: (date: string, finalAmount: number | null, comment: string) => mutate({ variables: { date, finalAmount, comment } }),
+    isPending: loading,
+  }
+}
+
+export function useUpdateAdminDayComment() {
+  const [mutate, { loading }] = useMutation(UPDATE_ADMIN_DAY_COMMENT)
+  return {
+    update: (date: string, comment: string) => mutate({ variables: { date, comment } }),
     isPending: loading,
   }
 }

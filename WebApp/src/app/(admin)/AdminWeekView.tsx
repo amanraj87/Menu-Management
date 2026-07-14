@@ -9,6 +9,7 @@ import {
   useMealCancellationsForRange,
   useToggleMealCancellation,
   useVendorDayNotesForRange,
+  useUpdateAdminDayComment,
 } from '@/shared/graphql/hooks'
 import { CONFIRM_ORDER_WITH_ITEMS, AGGREGATED_ORDERS_FOR_RANGE, ADMIN_SET_USER_SELECTION, RUN_AUTO_IMPORT } from '@/shared/graphql/operations'
 import { Card, Button, Loader } from '@/shared/ui'
@@ -48,6 +49,14 @@ function shortDate(dateStr: string): string {
 
 function money(n: number): string {
   return `₹${Math.round(n).toLocaleString('en-IN')}`
+}
+
+/** Keep only digits and a single decimal point so qty inputs accept floats. */
+function sanitizeQty(v: string): string {
+  let s = v.replace(/[^0-9.]/g, '')
+  const dot = s.indexOf('.')
+  if (dot !== -1) s = s.slice(0, dot + 1) + s.slice(dot + 1).replace(/\./g, '')
+  return s
 }
 
 const MEALS: { id: Meal; label: string; icon: string }[] = [
@@ -116,7 +125,8 @@ export function AdminWeekView() {
   const { users } = useUsers()
   const { settings, isLoading: settingsLoading } = useSettings()
   const { cancellations, isLoading: cancelLoading, refetch: refetchCancellations } = useMealCancellationsForRange(weekStart, weekEnd)
-  const { notes: vendorNotes, isLoading: notesLoading } = useVendorDayNotesForRange(weekStart, weekEnd)
+  const { notes: vendorNotes, isLoading: notesLoading, refetch: refetchNotes } = useVendorDayNotesForRange(weekStart, weekEnd)
+  const { update: updateAdminComment, isPending: adminCommentSaving } = useUpdateAdminDayComment()
   const { toggle: toggleCancel, isPending: toggling } = useToggleMealCancellation()
   const { updateSettings, isPending: settingsPending } = useUpdateSettings(
     () => { toast.add('Settings updated.', 'success'); setCapEditing(false); setDeliveryEditing(false) },
@@ -135,7 +145,8 @@ export function AdminWeekView() {
   // Per-user selection editor (admin overwrites one user's picks for a meal).
   const [editing, setEditing] = useState<{ date: string; meal: Meal } | null>(null)
   const [editUserId, setEditUserId] = useState('')
-  const [editItems, setEditItems] = useState<Record<string, number>>({})
+  // Qty inputs are held as raw strings so decimals (e.g. "0.5") can be typed.
+  const [editItems, setEditItems] = useState<Record<string, string>>({})
   const [editAddId, setEditAddId] = useState('')
   const [editSaving, setEditSaving] = useState(false)
 
@@ -158,10 +169,28 @@ export function AdminWeekView() {
   }, [aggregated])
 
   const vendorNotesByDate = useMemo(() => {
-    const map: Record<string, { finalAmount: number | null; comment: string }> = {}
-    for (const n of vendorNotes) map[n.date] = { finalAmount: n.finalAmount, comment: n.comment }
+    const map: Record<string, { finalAmount: number | null; comment: string; adminComment: string }> = {}
+    for (const n of vendorNotes) map[n.date] = { finalAmount: n.finalAmount, comment: n.comment, adminComment: n.adminComment }
     return map
   }, [vendorNotes])
+
+  // Admin per-day comment / reply editor.
+  const [commentEditDay, setCommentEditDay] = useState<string | null>(null)
+  const [commentDraft, setCommentDraft] = useState('')
+
+  const openCommentEdit = (date: string) => {
+    setCommentDraft(vendorNotesByDate[date]?.adminComment ?? '')
+    setCommentEditDay(date)
+  }
+  const saveAdminComment = async (date: string) => {
+    try {
+      await updateAdminComment(date, commentDraft.trim())
+      await refetchNotes()
+      setCommentEditDay(null)
+    } catch (e) {
+      toast.add((e as Error).message, 'error')
+    }
+  }
 
   const toggleDayCollapse = (date: string) => {
     setCollapsedDays(prev => {
@@ -217,15 +246,15 @@ export function AdminWeekView() {
   const pickEditUser = (userId: string) => {
     setEditUserId(userId)
     setEditAddId('')
-    if (editing) setEditItems(userSelectionFor(editing.date, editing.meal, userId))
-    else setEditItems({})
+    const sel = editing ? userSelectionFor(editing.date, editing.meal, userId) : {}
+    setEditItems(Object.fromEntries(Object.entries(sel).map(([k, v]) => [k, String(v)])))
   }
   const handleSaveUserSelection = async () => {
     if (!editing || !editUserId) return
     const { date, meal } = editing
     const items = Object.entries(editItems)
-      .filter(([, qty]) => qty > 0)
-      .map(([menuItemId, quantity]) => ({ menuItemId, quantity }))
+      .map(([menuItemId, raw]) => ({ menuItemId, quantity: parseFloat(raw) }))
+      .filter(({ quantity }) => Number.isFinite(quantity) && quantity > 0)
     setEditSaving(true)
     try {
       await client.mutate({
@@ -458,9 +487,10 @@ export function AdminWeekView() {
               </div>
 
               {collapsed ? (
-                vendorNote?.comment ? (
+                (vendorNote?.comment || vendorNote?.adminComment) ? (
                   <div style={{ marginTop: '0.5rem', fontSize: '0.8125rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
-                    {vendorNote.comment}
+                    {vendorNote?.comment ? <div>Vendor: {vendorNote.comment}</div> : null}
+                    {vendorNote?.adminComment ? <div>Admin: {vendorNote.adminComment}</div> : null}
                   </div>
                 ) : null
               ) : (
@@ -530,10 +560,10 @@ export function AdminWeekView() {
                                     <div key={mid} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                       <span style={{ flex: 1, fontSize: '0.8125rem', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{menuById.get(mid)?.name ?? 'Item'}</span>
                                       <input
-                                        type="number"
-                                        min="0"
+                                        type="text"
+                                        inputMode="decimal"
                                         value={qty}
-                                        onChange={(e) => setEditItems((prev) => ({ ...prev, [mid]: Math.max(0, Number(e.target.value) || 0) }))}
+                                        onChange={(e) => setEditItems((prev) => ({ ...prev, [mid]: sanitizeQty(e.target.value) }))}
                                         style={{ width: 54, padding: '0.25rem 0.3rem', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', fontSize: '0.8125rem', textAlign: 'center' }}
                                       />
                                       <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', minWidth: 28 }}>{menuById.get(mid)?.unit ?? ''}</span>
@@ -541,12 +571,12 @@ export function AdminWeekView() {
                                   ))}
                                   <select
                                     value={editAddId}
-                                    onChange={(e) => { const id = e.target.value; if (id) { setEditItems((prev) => ({ ...prev, [id]: prev[id] && prev[id] > 0 ? prev[id] : 1 })); setEditAddId('') } }}
+                                    onChange={(e) => { const id = e.target.value; if (id) { setEditItems((prev) => ({ ...prev, [id]: parseFloat(prev[id]) > 0 ? prev[id] : '1' })); setEditAddId('') } }}
                                     style={{ padding: '0.3rem 0.4rem', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', fontSize: '0.8125rem', width: '100%' }}
                                   >
                                     <option value="">+ Add dish…</option>
                                     {menuByMeal[meal]
-                                      .filter((mi) => !(editItems[mi._id] > 0))
+                                      .filter((mi) => !(parseFloat(editItems[mi._id]) > 0))
                                       .map((mi) => (
                                         <option key={mi._id} value={mi._id}>{mi.name}{mi.pricePerUnit != null ? ` · ₹${mi.pricePerUnit}` : ''}</option>
                                       ))}
@@ -596,11 +626,49 @@ export function AdminWeekView() {
                     <span style={{ color: 'var(--color-text-muted)' }}>Day total <strong style={{ color: 'var(--color-primary)', fontSize: '1rem' }}>{money(dayTotal)}</strong></span>
                   </div>
 
-                  {vendorNote?.comment && (
-                    <div style={{ marginTop: '0.5rem', fontSize: '0.8125rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
-                      Vendor: {vendorNote.comment}
-                    </div>
-                  )}
+                  {/* Comments: vendor's note + admin's own comment / reply */}
+                  <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {vendorNote?.comment ? (
+                      <div>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-muted)' }}>Vendor</div>
+                        <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>{vendorNote.comment}</div>
+                      </div>
+                    ) : null}
+
+                    {commentEditDay === d.date ? (
+                      <div style={{ padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: 8, background: 'var(--color-surface)' }}>
+                        <textarea
+                          value={commentDraft}
+                          onChange={(e) => setCommentDraft(e.target.value)}
+                          placeholder={vendorNote?.comment ? 'Reply to the vendor…' : 'Add a comment…'}
+                          rows={2}
+                          style={{ width: '100%', padding: '0.35rem 0.5rem', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', fontSize: '0.8125rem', resize: 'vertical', boxSizing: 'border-box' }}
+                        />
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                          <button className="btn btn-primary btn-sm" onClick={() => saveAdminComment(d.date)} disabled={adminCommentSaving}>{adminCommentSaving ? 'Saving…' : 'Save'}</button>
+                          <button className="btn btn-outline btn-sm" onClick={() => setCommentEditDay(null)}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '0.5rem' }}>
+                        <div style={{ flex: 1 }}>
+                          {vendorNote?.adminComment ? (
+                            <div>
+                              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-primary)' }}>Admin</div>
+                              <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>{vendorNote.adminComment}</div>
+                            </div>
+                          ) : null}
+                        </div>
+                        <button
+                          className="btn btn-outline btn-sm"
+                          onClick={() => openCommentEdit(d.date)}
+                          style={{ whiteSpace: 'nowrap', fontSize: '0.75rem' }}
+                        >
+                          {vendorNote?.adminComment ? 'Edit' : vendorNote?.comment ? 'Reply' : 'Comment'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </Card>

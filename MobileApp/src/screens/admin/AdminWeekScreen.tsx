@@ -11,6 +11,7 @@ import {
   CONFIRM_ORDER_WITH_ITEMS,
   RUN_AUTO_IMPORT,
   TOGGLE_MEAL_CANCELLATION,
+  UPDATE_ADMIN_DAY_COMMENT,
   UPDATE_SETTINGS,
 } from '../../api/operations';
 import { useMenuItems, useUsers, useSettings, useMealCancellationsForRange, useVendorDayNotesForRange } from '../../api/hooks';
@@ -24,6 +25,16 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 function dayName(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number);
   return DAY_NAMES[new Date(y, m - 1, d).getDay()];
+}
+
+/** Keep only digits and a single decimal point so qty inputs accept floats. */
+function sanitizeQty(v: string): string {
+  let s = v.replace(/[^0-9.]/g, '');
+  const dot = s.indexOf('.');
+  if (dot !== -1) {
+    s = s.slice(0, dot + 1) + s.slice(dot + 1).replace(/\./g, '');
+  }
+  return s;
 }
 
 type PersonShare = { userId: string; userName: string; quantity: number };
@@ -84,7 +95,8 @@ export function AdminWeekScreen() {
   // Per-user selection editor (admin overwrites one user's picks for a meal).
   const [editing, setEditing] = useState<{ date: string; meal: MealType } | null>(null);
   const [editUserId, setEditUserId] = useState('');
-  const [editItems, setEditItems] = useState<Record<string, number>>({});
+  // Qty inputs are held as raw strings so decimals (e.g. "0.5") can be typed.
+  const [editItems, setEditItems] = useState<Record<string, string>>({});
   const [editSaving, setEditSaving] = useState(false);
   const writeBusy = weekConfirming || loading;
 
@@ -95,12 +107,34 @@ export function AdminWeekScreen() {
   const wkEnd = addDays(wkStart, 6);
 
   const { cancellations, refetch: refetchCancellations } = useMealCancellationsForRange(wkStart, wkEnd);
-  const { notes: vendorNotes } = useVendorDayNotesForRange(wkStart, wkEnd);
+  const { notes: vendorNotes, refetch: refetchNotes } = useVendorDayNotesForRange(wkStart, wkEnd);
   const vendorNotesByDate = useMemo(() => {
-    const map: Record<string, { finalAmount: number | null; comment: string }> = {};
-    vendorNotes.forEach(n => { map[n.date] = { finalAmount: n.finalAmount, comment: n.comment }; });
+    const map: Record<string, { finalAmount: number | null; comment: string; adminComment: string }> = {};
+    vendorNotes.forEach(n => { map[n.date] = { finalAmount: n.finalAmount, comment: n.comment, adminComment: n.adminComment }; });
     return map;
   }, [vendorNotes]);
+
+  // Admin per-day comment / reply editor.
+  const [commentEditDay, setCommentEditDay] = useState<string | null>(null);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [commentSaving, setCommentSaving] = useState(false);
+
+  const openCommentEdit = (date: string) => {
+    setCommentDraft(vendorNotesByDate[date]?.adminComment ?? '');
+    setCommentEditDay(date);
+  };
+  const saveAdminComment = async (date: string) => {
+    setCommentSaving(true);
+    try {
+      await gqlRequest(UPDATE_ADMIN_DAY_COMMENT, { date, comment: commentDraft.trim() });
+      await refetchNotes();
+      setCommentEditDay(null);
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setCommentSaving(false);
+    }
+  };
 
   const cancelledSet = useMemo(() => {
     const s = new Set<string>();
@@ -146,14 +180,15 @@ export function AdminWeekScreen() {
   };
   const pickEditUser = (userId: string) => {
     setEditUserId(userId);
-    setEditItems(editing ? userSelectionFor(editing.date, editing.meal, userId) : {});
+    const sel = editing ? userSelectionFor(editing.date, editing.meal, userId) : {};
+    setEditItems(Object.fromEntries(Object.entries(sel).map(([k, v]) => [k, String(v)])));
   };
   const handleSaveUserSelection = async () => {
     if (!editing || !editUserId) return;
     const { date, meal } = editing;
     const items = Object.entries(editItems)
-      .filter(([, qty]) => qty > 0)
-      .map(([menuItemId, quantity]) => ({ menuItemId, quantity }));
+      .map(([menuItemId, raw]) => ({ menuItemId, quantity: parseFloat(raw) }))
+      .filter(({ quantity }) => Number.isFinite(quantity) && quantity > 0);
     setEditSaving(true);
     try {
       await gqlRequest(ADMIN_SET_USER_SELECTION, { userId: editUserId, date, mealType: meal, items });
@@ -467,9 +502,14 @@ export function AdminWeekScreen() {
               </Pressable>
 
               {collapsed ? (
-                vendorNote?.comment ? (
+                (vendorNote?.comment || vendorNote?.adminComment) ? (
                   <View style={styles.collapsedComment}>
-                    <Text style={styles.collapsedCommentText}>{vendorNote.comment}</Text>
+                    {vendorNote?.comment ? (
+                      <Text style={styles.collapsedCommentText}>Vendor: {vendorNote.comment}</Text>
+                    ) : null}
+                    {vendorNote?.adminComment ? (
+                      <Text style={styles.collapsedCommentText}>Admin: {vendorNote.adminComment}</Text>
+                    ) : null}
                   </View>
                 ) : null
               ) : (
@@ -527,20 +567,20 @@ export function AdminWeekScreen() {
                                     <Text style={styles.editItemName} numberOfLines={1}>{menuById.get(mid)?.name ?? 'Item'}</Text>
                                     <TextInput
                                       style={styles.editQtyInput}
-                                      value={String(qty)}
-                                      onChangeText={(v) => setEditItems(prev => ({ ...prev, [mid]: Math.max(0, Number(v) || 0) }))}
-                                      keyboardType="numeric"
+                                      value={qty}
+                                      onChangeText={(v) => setEditItems(prev => ({ ...prev, [mid]: sanitizeQty(v) }))}
+                                      keyboardType="decimal-pad"
                                     />
                                     <Text style={styles.editUnit}>{menuById.get(mid)?.unit ?? ''}</Text>
                                   </View>
                                 ))}
                                 <View style={styles.userPickerWrap}>
                                   {menuByMeal[meal]
-                                    .filter(mi => !(editItems[mi._id] > 0))
+                                    .filter(mi => !(parseFloat(editItems[mi._id]) > 0))
                                     .map(mi => (
                                       <Pressable
                                         key={mi._id}
-                                        onPress={() => setEditItems(prev => ({ ...prev, [mi._id]: prev[mi._id] && prev[mi._id] > 0 ? prev[mi._id] : 1 }))}
+                                        onPress={() => setEditItems(prev => ({ ...prev, [mi._id]: parseFloat(prev[mi._id]) > 0 ? prev[mi._id] : '1' }))}
                                         style={styles.addItemOption}>
                                         <Text style={styles.addItemOptionText} numberOfLines={1}>
                                           + {mi.name}{mi.pricePerUnit != null ? ` · ₹${mi.pricePerUnit}` : ''}
@@ -596,11 +636,48 @@ export function AdminWeekScreen() {
                       <Text style={styles.footerTotalValue}>₹{Math.round(dayTotal)}</Text>
                     </View>
                   </View>
-                  {vendorNote?.comment && (
-                    <View style={styles.collapsedComment}>
-                      <Text style={styles.collapsedCommentText}>Vendor: {vendorNote.comment}</Text>
-                    </View>
-                  )}
+                  {/* Comments: vendor's note + admin's own comment / reply */}
+                  <View style={styles.commentsWrap}>
+                    {vendorNote?.comment ? (
+                      <View style={styles.commentBlock}>
+                        <Text style={styles.commentAuthor}>Vendor</Text>
+                        <Text style={styles.commentBody}>{vendorNote.comment}</Text>
+                      </View>
+                    ) : null}
+
+                    {commentEditDay === date ? (
+                      <View style={styles.commentEditBox}>
+                        <TextInput
+                          style={styles.commentInput}
+                          value={commentDraft}
+                          onChangeText={setCommentDraft}
+                          placeholder={vendorNote?.comment ? 'Reply to the vendor…' : 'Add a comment…'}
+                          placeholderTextColor={colors.textFaint}
+                          multiline
+                        />
+                        <View style={styles.commentEditActions}>
+                          <Button title={commentSaving ? 'Saving…' : 'Save'} onPress={() => saveAdminComment(date)} loading={commentSaving} />
+                          <Button title="Cancel" variant="outline" onPress={() => setCommentEditDay(null)} />
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={styles.commentRow}>
+                        <View style={{ flex: 1 }}>
+                          {vendorNote?.adminComment ? (
+                            <View style={styles.commentBlock}>
+                              <Text style={styles.commentAuthorAdmin}>Admin</Text>
+                              <Text style={styles.commentBody}>{vendorNote.adminComment}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                        <Pressable onPress={() => openCommentEdit(date)} hitSlop={6} style={styles.commentBtn}>
+                          <Text style={styles.commentBtnText}>
+                            {vendorNote?.adminComment ? 'Edit' : vendorNote?.comment ? 'Reply' : 'Comment'}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    )}
+                  </View>
                 </View>
               )}
             </Card>
@@ -739,6 +816,23 @@ const styles = StyleSheet.create({
   subtotalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 5 },
   subtotalLabel: { color: colors.textMuted, fontSize: font.small, fontWeight: '700' },
   subtotalValue: { color: colors.text, fontSize: font.small, fontWeight: '700' },
+
+  commentsWrap: { marginTop: spacing.md, gap: spacing.sm },
+  commentBlock: { gap: 1 },
+  commentAuthor: { color: colors.textFaint, fontSize: font.tiny, fontWeight: '700' },
+  commentAuthorAdmin: { color: colors.primary, fontSize: font.tiny, fontWeight: '700' },
+  commentBody: { color: colors.textMuted, fontSize: font.small, fontStyle: 'italic' },
+  commentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  commentBtn: { paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.sm, backgroundColor: colors.bgElevated },
+  commentBtnText: { color: colors.primary, fontSize: font.tiny, fontWeight: '700' },
+  commentEditBox: {
+    padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surface,
+  },
+  commentInput: {
+    borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingVertical: 6, paddingHorizontal: 10,
+    color: colors.text, fontSize: font.small, minHeight: 50, textAlignVertical: 'top',
+  },
+  commentEditActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
 
   dayFooter: { marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
   footerLine: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },

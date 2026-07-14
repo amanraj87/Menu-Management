@@ -265,13 +265,19 @@ export const ADMIN_SET_USER_SELECTION = `
 
 export const VENDOR_DAY_NOTES_FOR_RANGE = `
   query VendorDayNotesForRange($startDate: String!, $endDate: String!) {
-    vendorDayNotesForRange(startDate: $startDate, endDate: $endDate) { id date finalAmount comment updatedAt }
+    vendorDayNotesForRange(startDate: $startDate, endDate: $endDate) { id date finalAmount comment adminComment updatedAt }
   }
 `;
 
 export const UPDATE_VENDOR_DAY_NOTE = `
   mutation UpdateVendorDayNote($date: String!, $finalAmount: Float, $comment: String!) {
-    updateVendorDayNote(date: $date, finalAmount: $finalAmount, comment: $comment) { id date finalAmount comment updatedAt }
+    updateVendorDayNote(date: $date, finalAmount: $finalAmount, comment: $comment) { id date finalAmount comment adminComment updatedAt }
+  }
+`;
+
+export const UPDATE_ADMIN_DAY_COMMENT = `
+  mutation UpdateAdminDayComment($date: String!, $comment: String!) {
+    updateAdminDayComment(date: $date, comment: $comment) { id date finalAmount comment adminComment updatedAt }
   }
 `;
 

@@ -69,6 +69,24 @@ function canToggleMeal(dateStr: string): boolean {
   return dateStr > toDateString(new Date())
 }
 
+/** True if the given YYYY-MM-DD date falls on Saturday or Sunday. */
+function isWeekend(dateStr: string): boolean {
+  const day = new Date(dateStr + 'T12:00:00').getDay() // 0 = Sun … 6 = Sat
+  return day === 0 || day === 6
+}
+
+/** True if the current local day is Saturday or Sunday. */
+function isWeekendToday(): boolean {
+  return isWeekend(toDateString(new Date()))
+}
+
+// Item add / delete / quantity changes are only allowed on the weekend
+// (Sat/Sun), and only for upcoming days. The meal on/off toggle is unaffected —
+// it stays available any day via canToggleMeal.
+function canEditItems(dateStr: string): boolean {
+  return isWeekendToday() && dateStr > toDateString(new Date())
+}
+
 export function PersonWeekView() {
   const [weekOf, setWeekOf] = useState(() => getWeekStart(toDateString(new Date())))
   const startDate = getWeekStart(weekOf)
@@ -303,7 +321,8 @@ export function PersonWeekView() {
           variant="secondary"
           className="person-week-import-btn"
           onClick={handleImportFromLastWeek}
-          disabled={importing}
+          disabled={importing || !isWeekendToday()}
+          title={!isWeekendToday() ? 'Items can only be changed on the weekend' : undefined}
         >
           {importing ? 'Importing…' : 'Import from last week'}
         </Button>
@@ -375,6 +394,7 @@ export function PersonWeekView() {
               )
               const optedOut = isMealOptedOut(dateStr, meal.id)
               const toggleEnabled = canToggleMeal(dateStr)
+              const itemsEditable = canEditItems(dateStr)
               return (
                 <Card key={meal.id} className="person-week-meal-card" style={{ flex: '1 1 200px', minWidth: 0, opacity: optedOut ? 0.5 : 1, transition: 'opacity 0.2s' }}>
                   <div className="person-week-meal-card-header">
@@ -449,6 +469,7 @@ export function PersonWeekView() {
                                   type="button"
                                   className="btn btn-ghost"
                                   aria-label="Decrease"
+                                  disabled={!itemsEditable}
                                   onClick={() =>
                                     handleQty(
                                       dateStr,
@@ -466,6 +487,7 @@ export function PersonWeekView() {
                                   step="0.1"
                                   inputMode="decimal"
                                   aria-label="Quantity"
+                                  disabled={!itemsEditable}
                                   value={draftQty[qtyKey(dateStr, meal.id, item._id)] ?? quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0}
                                   onChange={(e) => setDraftQty((prev) => ({ ...prev, [qtyKey(dateStr, meal.id, item._id)]: e.target.value }))}
                                   onBlur={() => commitDraft(qtyKey(dateStr, meal.id, item._id))}
@@ -476,6 +498,7 @@ export function PersonWeekView() {
                                   type="button"
                                   className="btn btn-ghost"
                                   aria-label="Increase"
+                                  disabled={!itemsEditable}
                                   onClick={() =>
                                     handleQty(dateStr, meal.id, item._id, (quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0) + 1)
                                   }
@@ -487,23 +510,29 @@ export function PersonWeekView() {
                           ))}
                         </ul>
                       )}
-                      {unselectedItems.length > 0 && (
-                        <div style={{ marginTop: '0.35rem', display: 'flex', justifyContent: 'flex-end' }}>
-                          <button
-                            type="button"
-                            className="person-week-add-item-btn"
-                            onClick={(e) => {
-                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                              setAddItemAnchor(rect)
-                              setOpenAddItemKey(`${dateStr}-${meal.id}`)
-                            }}
-                          >
-                            <span>Add an item…</span>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                              <path d="M6 9l6 6 6-6" />
-                            </svg>
-                          </button>
-                        </div>
+                      {itemsEditable ? (
+                        unselectedItems.length > 0 && (
+                          <div style={{ marginTop: '0.35rem', display: 'flex', justifyContent: 'flex-end' }}>
+                            <button
+                              type="button"
+                              className="person-week-add-item-btn"
+                              onClick={(e) => {
+                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                                setAddItemAnchor(rect)
+                                setOpenAddItemKey(`${dateStr}-${meal.id}`)
+                              }}
+                            >
+                              <span>Add an item…</span>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                <path d="M6 9l6 6 6-6" />
+                              </svg>
+                            </button>
+                          </div>
+                        )
+                      ) : (
+                        <p style={{ marginTop: '0.35rem', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                          🔒 Items can only be changed on the weekend. You can still turn a meal on/off any day.
+                        </p>
                       )}
                     </>
                   )}

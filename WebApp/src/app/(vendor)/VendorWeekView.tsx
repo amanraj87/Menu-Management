@@ -94,8 +94,8 @@ export function VendorWeekView() {
   const [exporting, setExporting] = useState(false)
 
   const notesByDate = useMemo(() => {
-    const map: Record<string, { finalAmount: number | null; comment: string }> = {}
-    for (const n of notes) map[n.date] = { finalAmount: n.finalAmount, comment: n.comment }
+    const map: Record<string, { finalAmount: number | null; comment: string; adminComment: string }> = {}
+    for (const n of notes) map[n.date] = { finalAmount: n.finalAmount, comment: n.comment, adminComment: n.adminComment }
     return map
   }, [notes])
 
@@ -371,9 +371,10 @@ export function VendorWeekView() {
               </div>
 
               {collapsed ? (
-                note?.comment ? (
+                (note?.comment || note?.adminComment) ? (
                   <div style={{ marginTop: '0.5rem', fontSize: '0.8125rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
-                    {note.comment}
+                    {note?.comment ? <div>{note.comment}</div> : null}
+                    {note?.adminComment ? <div style={{ color: 'var(--color-primary)' }}>Admin: {note.adminComment}</div> : null}
                   </div>
                 ) : null
               ) : (
@@ -457,7 +458,8 @@ export function VendorWeekView() {
                   ) : (
                     <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '0.5rem' }}>
                       <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', flex: 1 }}>
-                        {note?.comment ? <span style={{ fontStyle: 'italic' }}>{note.comment}</span> : null}
+                        {note?.comment ? <div style={{ fontStyle: 'italic' }}>{note.comment}</div> : null}
+                        {note?.adminComment ? <div style={{ fontStyle: 'italic', color: 'var(--color-primary)', marginTop: '0.15rem' }}>Admin: {note.adminComment}</div> : null}
                       </div>
                       <button
                         className="btn btn-outline btn-sm"
