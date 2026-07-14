@@ -100,6 +100,8 @@ export const typeDefs = `#graphql
     date: String!
     finalAmount: Float
     comment: String!
+    """Admin's own comment / reply to the vendor for this day."""
+    adminComment: String!
     updatedAt: String
   }
 
@@ -248,6 +250,8 @@ export const typeDefs = `#graphql
     toggleMealCancellation(date: String!, mealType: MealType!, cancelled: Boolean!): Boolean!
     """Vendor: set or update the final amount and comment for a day."""
     updateVendorDayNote(date: String!, finalAmount: Float, comment: String!): VendorDayNote!
+    """Admin: set or update the admin comment / reply for a day."""
+    updateAdminDayComment(date: String!, comment: String!): VendorDayNote!
     """Admin: manually run the weekly auto-import into the given week (defaults to next week). Returns slots created."""
     runAutoImport(targetWeekStart: String): Int!
     """Register this device's FCM push token for the signed-in user (upsert by token)."""

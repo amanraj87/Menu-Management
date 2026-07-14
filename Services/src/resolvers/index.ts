@@ -57,6 +57,7 @@ export const resolvers = {
     updateSettings: settings.updateSettings,
     toggleMealCancellation: mealCancellations.toggleMealCancellation,
     updateVendorDayNote: vendorDayNotes.updateVendorDayNote,
+    updateAdminDayComment: vendorDayNotes.updateAdminDayComment,
     registerPushToken: pushTokens.registerPushToken,
     unregisterPushToken: pushTokens.unregisterPushToken,
     runAutoImport,

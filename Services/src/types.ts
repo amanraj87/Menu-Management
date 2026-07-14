@@ -101,6 +101,7 @@ export interface VendorDayNoteDoc {
   date: string
   finalAmount: number | null
   comment: string
+  adminComment?: string
   updatedBy: ObjectId
   updatedAt: Date
 }
