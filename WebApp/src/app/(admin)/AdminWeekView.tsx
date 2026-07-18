@@ -469,6 +469,10 @@ export function AdminWeekView() {
           const today = isTodayStr(d.date)
           const collapsed = collapsedDays.has(d.date)
           const vendorNote = vendorNotesByDate[d.date]
+          const finalAmt = vendorNote?.finalAmount ?? null
+          // Only strike through when the vendor's final differs from the computed total.
+          const showFinal = finalAmt != null && Math.round(finalAmt) !== Math.round(dayTotal)
+          const finalStr = finalAmt != null ? money(finalAmt) : ''
           return (
             <Card key={d.date} className="content-card" style={today ? { borderColor: 'var(--color-primary)' } : undefined}>
               <div
@@ -483,7 +487,14 @@ export function AdminWeekView() {
                     <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-primary)', background: 'rgba(34,197,94,0.14)', padding: '0.1rem 0.5rem', borderRadius: 999 }}>Today</span>
                   )}
                 </div>
-                <span style={{ fontSize: '1.15rem', fontWeight: 800 }}>{money(dayTotal)}</span>
+                {showFinal ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: '0.4rem', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', textDecoration: 'line-through' }}>{money(dayTotal)}</span>
+                    <span style={{ fontSize: '1.15rem', fontWeight: 800 }}>{finalStr}</span>
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '1.15rem', fontWeight: 800 }}>{money(dayTotal)}</span>
+                )}
               </div>
 
               {collapsed ? (
@@ -623,7 +634,17 @@ export function AdminWeekView() {
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1.5rem', flexWrap: 'wrap', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid var(--color-border)', fontSize: '0.875rem' }}>
                     <span style={{ color: 'var(--color-text-muted)' }}>Meals <strong style={{ color: 'var(--color-text)' }}>{money(d.mealsTotal)}</strong></span>
                     <span style={{ color: 'var(--color-text-muted)' }}>Delivery <strong style={{ color: 'var(--color-text)' }}>{deliveryOf(d) > 0 ? `${money(deliveryOf(d))} (${activeMealsOf(d)} × ${money(delivery)})` : '—'}</strong></span>
-                    <span style={{ color: 'var(--color-text-muted)' }}>Day total <strong style={{ color: 'var(--color-primary)', fontSize: '1rem' }}>{money(dayTotal)}</strong></span>
+                    <span style={{ color: 'var(--color-text-muted)' }}>
+                      Day total{' '}
+                      {showFinal ? (
+                        <>
+                          <strong style={{ color: 'var(--color-text-muted)', fontWeight: 600, textDecoration: 'line-through' }}>{money(dayTotal)}</strong>{' '}
+                          <strong style={{ color: 'var(--color-primary)', fontSize: '1rem' }}>{finalStr}</strong>
+                        </>
+                      ) : (
+                        <strong style={{ color: 'var(--color-primary)', fontSize: '1rem' }}>{money(dayTotal)}</strong>
+                      )}
+                    </span>
                   </div>
 
                   {/* Comments: vendor's note + admin's own comment / reply */}

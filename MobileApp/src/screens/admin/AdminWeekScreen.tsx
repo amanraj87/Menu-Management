@@ -489,6 +489,9 @@ export function AdminWeekScreen() {
           const dayTotal = mealsTotal + deliveryTotal;
           const collapsed = collapsedDays.has(date);
           const vendorNote = vendorNotesByDate[date];
+          const finalAmt = vendorNote?.finalAmount ?? undefined;
+          // Only strike through when the vendor's final differs from the computed total.
+          const showFinal = finalAmt != null && Math.round(finalAmt) !== Math.round(dayTotal);
 
           return (
             <Card key={date} padded={false}>
@@ -498,7 +501,14 @@ export function AdminWeekScreen() {
                   <Text style={styles.dayTitle}>{dayName(date)} · {formatShort(date)}</Text>
                   {isToday(date) && <Text style={styles.todayBadge}>Today</Text>}
                 </View>
-                <Text style={styles.dayAmount}>₹{Math.round(dayTotal)}</Text>
+                {showFinal ? (
+                  <View style={styles.amountWrap}>
+                    <Text style={styles.dayAmountStruck}>₹{Math.round(dayTotal)}</Text>
+                    <Text style={styles.dayAmount}>₹{finalAmt}</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.dayAmount}>₹{Math.round(dayTotal)}</Text>
+                )}
               </Pressable>
 
               {collapsed ? (
@@ -633,7 +643,14 @@ export function AdminWeekScreen() {
                     </View>
                     <View style={styles.footerLine}>
                       <Text style={styles.footerTotalLabel}>Day total</Text>
-                      <Text style={styles.footerTotalValue}>₹{Math.round(dayTotal)}</Text>
+                      {showFinal ? (
+                        <View style={styles.amountWrap}>
+                          <Text style={styles.footerTotalStruck}>₹{Math.round(dayTotal)}</Text>
+                          <Text style={styles.footerTotalValue}>₹{finalAmt}</Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.footerTotalValue}>₹{Math.round(dayTotal)}</Text>
+                      )}
                     </View>
                   </View>
                   {/* Comments: vendor's note + admin's own comment / reply */}
@@ -747,6 +764,19 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   dayAmount: { color: colors.text, fontSize: 18, fontWeight: '800' },
+  amountWrap: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  dayAmountStruck: {
+    color: colors.textFaint,
+    fontSize: font.small,
+    fontWeight: '600',
+    textDecorationLine: 'line-through',
+  },
+  footerTotalStruck: {
+    color: colors.textFaint,
+    fontSize: font.small,
+    fontWeight: '600',
+    textDecorationLine: 'line-through',
+  },
   collapsedComment: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
   collapsedCommentText: { color: colors.textMuted, fontSize: font.small, fontStyle: 'italic' },
 
