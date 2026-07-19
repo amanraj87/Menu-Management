@@ -365,12 +365,16 @@ export function AdminWeekScreen() {
   const today = todayISO();
   const weekTotal = days.reduce((sum, date) => {
     const { mealsTotal, activeMeals } = buildMeals(date);
-    return sum + mealsTotal + delivery * activeMeals;
+    const computed = mealsTotal + delivery * activeMeals;
+    const finalAmt = vendorNotesByDate[date]?.finalAmount ?? null;
+    return sum + ((finalAmt != null && Math.round(finalAmt) !== Math.round(computed)) ? finalAmt : computed);
   }, 0);
   const expenseTillNow = days.reduce((sum, date) => {
     if (date > today) return sum;
     const { mealsTotal, activeMeals } = buildMeals(date);
-    return sum + mealsTotal + delivery * activeMeals;
+    const computed = mealsTotal + delivery * activeMeals;
+    const finalAmt = vendorNotesByDate[date]?.finalAmount ?? null;
+    return sum + ((finalAmt != null && Math.round(finalAmt) !== Math.round(computed)) ? finalAmt : computed);
   }, 0);
 
   return (

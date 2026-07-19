@@ -365,8 +365,14 @@ export function AdminWeekView() {
   const activeMealsOf = (d: DayData) => MEALS.filter(({ id }) => !d.cancelled[id] && d.subtotals[id] > 0).length
   const deliveryOf = (d: DayData) => delivery * activeMealsOf(d)
   const dayTotalOf = (d: DayData) => d.mealsTotal + deliveryOf(d)
-  const weekTotal = week.reduce((sum, d) => sum + dayTotalOf(d), 0)
-  const expenseTillNow = week.reduce((sum, d) => sum + (d.date <= todayStr ? dayTotalOf(d) : 0), 0)
+  // Use vendor's final amount when it differs from computed total, otherwise use computed.
+  const effectiveDayTotal = (d: DayData) => {
+    const computed = dayTotalOf(d)
+    const finalAmt = vendorNotesByDate[d.date]?.finalAmount ?? null
+    return (finalAmt != null && Math.round(finalAmt) !== Math.round(computed)) ? finalAmt : computed
+  }
+  const weekTotal = week.reduce((sum, d) => sum + effectiveDayTotal(d), 0)
+  const expenseTillNow = week.reduce((sum, d) => sum + (d.date <= todayStr ? effectiveDayTotal(d) : 0), 0)
 
   return (
     <>
