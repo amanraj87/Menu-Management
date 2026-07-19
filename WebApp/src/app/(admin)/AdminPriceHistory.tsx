@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Card, Loader } from '@/shared/ui'
 import { usePriceHistory } from '@/shared/graphql/hooks'
-import { useMenuItems } from '@/shared/graphql/hooks'
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
@@ -20,7 +19,6 @@ function formatPrice(v: number | null): string {
 
 export function AdminPriceHistory() {
   const { history, isLoading } = usePriceHistory()
-  const { items: menuItems, isLoading: menuLoading } = useMenuItems()
   const [filter, setFilter] = useState('')
 
   const menuItemNames = useMemo(() => {
@@ -46,7 +44,7 @@ export function AdminPriceHistory() {
     return Array.from(map.entries())
   }, [filtered])
 
-  if (isLoading || menuLoading) return <Loader />
+  if (isLoading) return <Loader />
 
   return (
     <Card className="content-card" title="Price History">
