@@ -270,20 +270,21 @@ export function PersonWeekView() {
     return out
   })()
 
-  // Total price for the visible week, from current (unsaved included) quantities.
-  const weekTotal = (() => {
+  // Price total for a single day (respecting opt-outs).
+  const dayTotalFor = (dateStr: string) => {
     let total = 0
-    for (const dateStr of weekDates) {
-      for (const meal of MEALS) {
-        if (isMealOptedOut(dateStr, meal.id)) continue
-        for (const item of menuByMeal[meal.id]) {
-          const qty = quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0
-          if (qty > 0 && item.pricePerUnit != null) total += qty * item.pricePerUnit
-        }
+    for (const meal of MEALS) {
+      if (isMealOptedOut(dateStr, meal.id)) continue
+      for (const item of menuByMeal[meal.id]) {
+        const qty = quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0
+        if (qty > 0 && item.pricePerUnit != null) total += qty * item.pricePerUnit
       }
     }
     return total
-  })()
+  }
+
+  // Total price for the visible week = sum of the daily totals.
+  const weekTotal = weekDates.reduce((sum, dateStr) => sum + dayTotalFor(dateStr), 0)
 
   if (menuLoading || weekLoading) return <Loader />
 
@@ -362,24 +363,28 @@ export function PersonWeekView() {
               <h3 style={{ margin: 0, fontSize: '1rem' }}>
                 {DAY_NAMES[dayIndex]} — {dateStr}
               </h3>
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{
-                  flexShrink: 0,
-                  transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.2s ease',
-                }}
-                aria-hidden
-              >
-                <path d="M6 9l6 6 6-6" />
-              </svg>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
+                <strong style={{ color: 'var(--color-primary)', fontSize: '1rem', fontWeight: 800 }}>
+                  ₹{Math.round(dayTotalFor(dateStr))}
+                </strong>
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{
+                    transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.2s ease',
+                  }}
+                  aria-hidden
+                >
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </span>
             </button>
             {!isCollapsed && (
             <div style={{ padding: '1rem 1rem 1rem' }}>
@@ -452,62 +457,74 @@ export function PersonWeekView() {
                         </p>
                       ) : (
                         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                          {selectedItems.map((item: MenuItem) => (
+                          {selectedItems.map((item: MenuItem) => {
+                            const qty = quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0
+                            const price = item.pricePerUnit ?? 0
+                            const lineTotal = price * qty
+                            return (
                             <li
                               key={item._id}
                               style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                padding: '0.25rem 0',
+                                padding: '0.4rem 0',
                                 borderBottom: '1px solid var(--color-border)',
                               }}
                             >
-                              <span className="person-week-meal-item-name">{item.name}</span>
-                              <div className="person-week-qty-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                                <button
-                                  type="button"
-                                  className="btn btn-ghost"
-                                  aria-label="Decrease"
-                                  disabled={!itemsEditable}
-                                  onClick={() =>
-                                    handleQty(
-                                      dateStr,
-                                      meal.id,
-                                      item._id,
-                                      Math.max(0, (quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0) - 1)
-                                    )
-                                  }
-                                >
-                                  −
-                                </button>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  step="0.1"
-                                  inputMode="decimal"
-                                  aria-label="Quantity"
-                                  disabled={!itemsEditable}
-                                  value={draftQty[qtyKey(dateStr, meal.id, item._id)] ?? quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0}
-                                  onChange={(e) => setDraftQty((prev) => ({ ...prev, [qtyKey(dateStr, meal.id, item._id)]: e.target.value }))}
-                                  onBlur={() => commitDraft(qtyKey(dateStr, meal.id, item._id))}
-                                  className="input input-qty person-week-qty-input"
-                                  style={{ width: 44, minWidth: 44, textAlign: 'center' }}
-                                />
-                                <button
-                                  type="button"
-                                  className="btn btn-ghost"
-                                  aria-label="Increase"
-                                  disabled={!itemsEditable}
-                                  onClick={() =>
-                                    handleQty(dateStr, meal.id, item._id, (quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0) + 1)
-                                  }
-                                >
-                                  +
-                                </button>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                                <span className="person-week-meal-item-name" style={{ flex: 1, minWidth: 0 }}>{item.name}</span>
+                                <div className="person-week-qty-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost"
+                                    aria-label="Decrease"
+                                    disabled={!itemsEditable}
+                                    onClick={() =>
+                                      handleQty(
+                                        dateStr,
+                                        meal.id,
+                                        item._id,
+                                        Math.max(0, (quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0) - 1)
+                                      )
+                                    }
+                                  >
+                                    −
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step="0.1"
+                                    inputMode="decimal"
+                                    aria-label="Quantity"
+                                    disabled={!itemsEditable}
+                                    value={draftQty[qtyKey(dateStr, meal.id, item._id)] ?? quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0}
+                                    onChange={(e) => setDraftQty((prev) => ({ ...prev, [qtyKey(dateStr, meal.id, item._id)]: e.target.value }))}
+                                    onBlur={() => commitDraft(qtyKey(dateStr, meal.id, item._id))}
+                                    className="input input-qty person-week-qty-input"
+                                    style={{ width: 44, minWidth: 44, textAlign: 'center' }}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost"
+                                    aria-label="Increase"
+                                    disabled={!itemsEditable}
+                                    onClick={() =>
+                                      handleQty(dateStr, meal.id, item._id, (quantities[qtyKey(dateStr, meal.id, item._id)] ?? 0) + 1)
+                                    }
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.15rem' }}>
+                                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.7rem' }}>
+                                  ₹{price}/{item.unit} × {qty}
+                                </span>
+                                <span style={{ color: 'var(--color-primary)', fontSize: '0.75rem', fontWeight: 700 }}>
+                                  ₹{lineTotal.toFixed(2).replace(/\.00$/, '')}
+                                </span>
                               </div>
                             </li>
-                          ))}
+                            )
+                          })}
                         </ul>
                       )}
                       {itemsEditable ? (

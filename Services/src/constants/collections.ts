@@ -14,6 +14,7 @@ export const COLLECTIONS = {
   vendor_day_notes: 'vendor_day_notes',
   job_runs: 'job_runs',
   push_tokens: 'push_tokens',
+  price_history: 'price_history',
 } as const
 
 export type CollectionName = keyof typeof COLLECTIONS

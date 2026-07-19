@@ -40,6 +40,7 @@ import {
   VENDOR_DAY_NOTES_FOR_RANGE,
   UPDATE_VENDOR_DAY_NOTE,
   UPDATE_ADMIN_DAY_COMMENT,
+  PRICE_HISTORY,
 } from './operations'
 import { toUser, toMenuItem, toSelection, toAggregatedOrder, toConfirmedOrder, toFeedback } from './mappers'
 import type { MealType, UserRole } from '@/shared/types'
@@ -516,4 +517,20 @@ export function useUpdateSettings(onSuccess?: () => void, onError?: (e: Error) =
     isPending: result.loading,
     error: result.error,
   }
+}
+
+export interface PriceHistoryEntry {
+  id: string
+  menuItemId: string
+  menuItemName: string
+  oldPrice: number | null
+  newPrice: number | null
+  changedAt: string
+}
+
+export function usePriceHistory(menuItemId?: string) {
+  const { data, loading, error } = useQuery<{ priceHistory: PriceHistoryEntry[] }>(PRICE_HISTORY, {
+    variables: menuItemId ? { menuItemId } : {},
+  })
+  return { history: data?.priceHistory ?? [], isLoading: loading, error }
 }

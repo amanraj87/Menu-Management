@@ -4,7 +4,7 @@ import { COLLECTIONS } from '../constants/collections.js'
 import { sendToUsers, userIdsByRole } from '../services/fcm.js'
 import type { ContextUser } from '../types.js'
 import type { MealType } from '../types.js'
-import type { MenuItemDoc } from '../types.js'
+import type { MenuItemDoc, PriceHistoryDoc } from '../types.js'
 
 function toMenuItem(doc: MenuItemDoc | null): Record<string, unknown> | null {
   if (!doc) return null
@@ -52,6 +52,25 @@ export async function createMenuItem(
   }
   const { insertedId } = await db.collection(COLLECTIONS.menu_items).insertOne(doc)
   const inserted = await db.collection(COLLECTIONS.menu_items).findOne({ _id: insertedId }) as MenuItemDoc
+
+  if (args.input.pricePerUnit != null) {
+    await db.collection(COLLECTIONS.price_history).insertOne({
+      menuItemId: insertedId,
+      menuItemName: args.input.name,
+      oldPrice: null,
+      newPrice: args.input.pricePerUnit,
+      changedAt: now,
+    })
+  }
+
+  const admins = await userIdsByRole('admin')
+  await sendToUsers(
+    admins,
+    'New menu item added',
+    `${args.input.name} (${args.input.mealType}) — ₹${args.input.pricePerUnit ?? 0}/${args.input.unit}`,
+    { type: 'menuAdd', menuItemId: insertedId.toString() },
+  )
+
   return toMenuItem(inserted)!
 }
 
@@ -79,28 +98,91 @@ export async function updateMenuItem(
   )
   const updated = result as MenuItemDoc | null
 
-  // A2: notify admins only when the price actually changed (not on name/unit edits).
-  if (
-    updated &&
-    args.input.pricePerUnit !== undefined &&
-    existing?.pricePerUnit !== updated.pricePerUnit
-  ) {
+  if (updated) {
+    const priceChanged =
+      args.input.pricePerUnit !== undefined &&
+      existing?.pricePerUnit !== updated.pricePerUnit
+
+    if (priceChanged) {
+      await db.collection(COLLECTIONS.price_history).insertOne({
+        menuItemId: _id,
+        menuItemName: updated.name,
+        oldPrice: existing?.pricePerUnit ?? null,
+        newPrice: updated.pricePerUnit ?? null,
+        changedAt: new Date(),
+      })
+    }
+
     const admins = await userIdsByRole('admin')
-    await sendToUsers(
-      admins,
-      'Vendor changed a meal price',
-      `${updated.name} is now ₹${updated.pricePerUnit}`,
-      { type: 'menuPrice', menuItemId: args.id },
-    )
+    if (priceChanged) {
+      await sendToUsers(
+        admins,
+        'Vendor changed a meal price',
+        `${updated.name} is now ₹${updated.pricePerUnit}`,
+        { type: 'menuPrice', menuItemId: args.id },
+      )
+    } else {
+      const changes: string[] = []
+      if (args.input.name !== undefined && args.input.name !== existing?.name)
+        changes.push(`name → ${args.input.name}`)
+      if (args.input.unit !== undefined && args.input.unit !== existing?.unit)
+        changes.push(`unit → ${args.input.unit}`)
+      if (args.input.mealType !== undefined && args.input.mealType !== existing?.mealType)
+        changes.push(`meal → ${args.input.mealType}`)
+      if (changes.length > 0) {
+        await sendToUsers(
+          admins,
+          'Vendor updated a menu item',
+          `${updated.name}: ${changes.join(', ')}`,
+          { type: 'menuUpdate', menuItemId: args.id },
+        )
+      }
+    }
   }
 
   return toMenuItem(updated)
+}
+
+export async function priceHistory(
+  _: unknown,
+  args: { menuItemId?: string },
+): Promise<Record<string, unknown>[]> {
+  const db = getDb()
+  const filter: Record<string, unknown> = {}
+  if (args.menuItemId) {
+    if (!ObjectId.isValid(args.menuItemId)) return []
+    filter.menuItemId = new ObjectId(args.menuItemId)
+  }
+  const docs = (await db
+    .collection(COLLECTIONS.price_history)
+    .find(filter)
+    .sort({ changedAt: -1 })
+    .limit(200)
+    .toArray()) as PriceHistoryDoc[]
+  return docs.map((d) => ({
+    id: d._id.toString(),
+    menuItemId: d.menuItemId.toString(),
+    menuItemName: d.menuItemName,
+    oldPrice: d.oldPrice,
+    newPrice: d.newPrice,
+    changedAt: d.changedAt.toISOString(),
+  }))
 }
 
 export async function deleteMenuItem(_: unknown, args: { id: string }, context: { user?: ContextUser }): Promise<boolean> {
   if (!context.user || context.user.role !== 'vendor') throw new Error('Only vendor can remove menu items')
   const db = getDb()
   if (!ObjectId.isValid(args.id)) return false
+  const existing = await db.collection(COLLECTIONS.menu_items).findOne({ _id: new ObjectId(args.id) }) as MenuItemDoc | null
   const result = await db.collection(COLLECTIONS.menu_items).deleteOne({ _id: new ObjectId(args.id) })
+  if (result.deletedCount === 1 && existing) {
+    const admins = await userIdsByRole('admin')
+    await sendToUsers(
+      admins,
+      'Menu item removed',
+      `${existing.name} (${existing.mealType}) was removed by vendor`,
+      { type: 'menuDelete' },
+    )
+  }
   return result.deletedCount === 1
 }

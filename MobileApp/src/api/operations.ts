@@ -298,3 +298,16 @@ export const UNREGISTER_PUSH_TOKEN = `
     unregisterPushToken(token: $token)
   }
 `;
+
+export const PRICE_HISTORY = `
+  query PriceHistory($menuItemId: ID) {
+    priceHistory(menuItemId: $menuItemId) {
+      id
+      menuItemId
+      menuItemName
+      oldPrice
+      newPrice
+      changedAt
+    }
+  }
+`;

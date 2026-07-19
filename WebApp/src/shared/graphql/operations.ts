@@ -506,6 +506,19 @@ export const RUN_AUTO_IMPORT = gql`
   }
 `
 
+export const PRICE_HISTORY = gql`
+  query PriceHistory($menuItemId: ID) {
+    priceHistory(menuItemId: $menuItemId) {
+      id
+      menuItemId
+      menuItemName
+      oldPrice
+      newPrice
+      changedAt
+    }
+  }
+`
+
 export const MEAL_DONE_STATUS = gql`
   query MealDoneStatus($date: String!, $mealType: MealType!) {
     mealDoneStatus(date: $date, mealType: $mealType) {

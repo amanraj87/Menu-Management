@@ -17,6 +17,7 @@ import {
   WEEKLY_EXPENSE,
   MEAL_CANCELLATIONS_FOR_RANGE,
   VENDOR_DAY_NOTES_FOR_RANGE,
+  PRICE_HISTORY,
 } from './operations';
 import type {
   AggregatedOrder,
@@ -331,4 +332,21 @@ export function useVendorDayNotesForRange(startDate: string, endDate: string) {
     { skip: !startDate || !endDate },
   );
   return { notes: q.data?.vendorDayNotesForRange ?? [], ...q };
+}
+
+export interface PriceHistoryEntry {
+  id: string;
+  menuItemId: string;
+  menuItemName: string;
+  oldPrice: number | null;
+  newPrice: number | null;
+  changedAt: string;
+}
+
+export function usePriceHistory(menuItemId?: string) {
+  const q = useGqlQuery<{ priceHistory: PriceHistoryEntry[] }>(
+    PRICE_HISTORY,
+    menuItemId ? { menuItemId } : {},
+  );
+  return { history: q.data?.priceHistory ?? [], loading: q.loading, refetch: q.refetch };
 }

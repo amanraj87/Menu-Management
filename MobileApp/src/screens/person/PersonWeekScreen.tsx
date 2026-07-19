@@ -269,17 +269,23 @@ export function PersonWeekScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheetMeal, menu.items, search, quantities, activeDay]);
 
-  // Total price for the visible week, from current (unsaved included) quantities.
-  const weekTotal = useMemo(() => {
-    let total = 0;
+  // Per-day price totals (respecting opt-outs), so each day shows its own cost.
+  const dayTotals = useMemo(() => {
+    const m: Record<string, number> = {};
     for (const [k, qty] of Object.entries(quantities)) {
       const [date, meal, itemId] = k.split('|');
       if (localOptOuts.has(`${date}|${meal}`)) continue;
       const price = itemMap.get(itemId)?.pricePerUnit;
-      if (price != null) total += price * qty;
+      if (price != null) m[date] = (m[date] ?? 0) + price * qty;
     }
-    return total;
+    return m;
   }, [quantities, itemMap, localOptOuts]);
+
+  // Total price for the visible week = sum of the daily totals.
+  const weekTotal = useMemo(
+    () => Object.values(dayTotals).reduce((s, v) => s + v, 0),
+    [dayTotals],
+  );
 
   const loading = menu.loading || sel.loading;
 
@@ -348,11 +354,20 @@ export function PersonWeekScreen() {
                 style={[styles.dayChipNum, active && styles.dayChipTextActive]}>
                 {dayOfMonth(d)}
               </Text>
+              <Text
+                style={[styles.dayChipPrice, active && styles.dayChipTextActive]}>
+                ₹{Math.round(dayTotals[d] ?? 0)}
+              </Text>
               {today ? <View style={styles.todayDot} /> : null}
             </Pressable>
           );
         })}
       </ScrollView>
+
+      <View style={styles.dayTotalRow}>
+        <Text style={styles.dayTotalLabel}>Total for {formatShort(activeDay)}</Text>
+        <Text style={styles.dayTotalValue}>₹{Math.round(dayTotals[activeDay] ?? 0)}</Text>
+      </View>
 
       {loading && !menu.items.length ? (
         <Loader label="Loading your selections…" />
@@ -392,19 +407,26 @@ export function PersonWeekScreen() {
                   {rows.length === 0 ? (
                     <Text style={styles.emptyRow}>No items yet</Text>
                   ) : (
-                    rows.map(r => (
+                    rows.map(r => {
+                      const price = r.item!.pricePerUnit ?? 0;
+                      const lineTotal = price * r.qty;
+                      return (
                       <View key={r.itemId} style={styles.itemRow}>
-                        <View style={styles.flex1}>
-                          <Text style={styles.itemName}>{r.item!.name}</Text>
-                          <Text style={styles.itemUnit}>per {r.item!.unit}</Text>
+                        <View style={styles.itemMainRow}>
+                          <Text style={styles.itemName} numberOfLines={1}>{r.item!.name}</Text>
+                          <Stepper
+                            value={r.qty}
+                            disabled={!itemsEditable}
+                            onChange={v => setQty(activeDay, meal, r.itemId, v)}
+                          />
                         </View>
-                        <Stepper
-                          value={r.qty}
-                          disabled={!itemsEditable}
-                          onChange={v => setQty(activeDay, meal, r.itemId, v)}
-                        />
+                        <View style={styles.itemPriceRow}>
+                          <Text style={styles.itemUnit}>₹{price}/{r.item!.unit} × {r.qty}</Text>
+                          <Text style={styles.itemLineTotal}>₹{lineTotal.toFixed(2).replace(/\.00$/, '')}</Text>
+                        </View>
                       </View>
-                    ))
+                      );
+                    })
                   )}
 
                   {itemsEditable ? (
@@ -547,7 +569,16 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: 2,
   },
+  dayChipPrice: { color: colors.primary, fontSize: font.tiny, fontWeight: '700', marginTop: 2 },
   dayChipTextActive: { color: '#04140a' },
+  dayTotalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xs,
+  },
+  dayTotalLabel: { color: colors.textMuted, fontSize: font.small, fontWeight: '600' },
+  dayTotalValue: { color: colors.primary, fontSize: font.h3, fontWeight: '800' },
   todayDot: {
     width: 5,
     height: 5,
@@ -593,15 +624,16 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  itemName: { color: colors.text, fontSize: font.body, fontWeight: '600' },
-  itemUnit: { color: colors.textFaint, fontSize: font.tiny, marginTop: 2 },
+  itemMainRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  itemPriceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
+  itemName: { color: colors.text, fontSize: font.body, fontWeight: '600', flex: 1 },
+  itemLineTotal: { color: colors.primary, fontSize: font.small, fontWeight: '700' },
+  itemUnit: { color: colors.textFaint, fontSize: font.tiny },
   addRow: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,

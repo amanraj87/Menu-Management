@@ -32,6 +32,7 @@ export const resolvers = {
     weeklyExpense: selections.weeklyExpense,
     mealCancellationsForRange: mealCancellations.mealCancellationsForRange,
     vendorDayNotesForRange: vendorDayNotes.vendorDayNotesForRange,
+    priceHistory: menuItems.priceHistory,
     feedbacksForAdmin: feedback.feedbacksForAdmin,
     confirmedFeedbacks: feedback.confirmedFeedbacks,
     myFeedbacks: feedback.myFeedbacks,

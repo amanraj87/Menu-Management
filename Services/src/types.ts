@@ -122,6 +122,15 @@ export interface SettingsDoc {
   updatedBy: ObjectId
 }
 
+export interface PriceHistoryDoc {
+  _id: ObjectId
+  menuItemId: ObjectId
+  menuItemName: string
+  oldPrice: number | null
+  newPrice: number | null
+  changedAt: Date
+}
+
 export interface ContextUser {
   userId: string
   role: 'person' | 'admin' | 'vendor'

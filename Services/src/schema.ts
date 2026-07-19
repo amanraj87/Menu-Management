@@ -117,6 +117,15 @@ export const typeDefs = `#graphql
     vendorReplyAt: String
   }
 
+  type PriceHistoryEntry {
+    id: ID!
+    menuItemId: ID!
+    menuItemName: String!
+    oldPrice: Float
+    newPrice: Float
+    changedAt: String!
+  }
+
   enum UserRole {
     person
     admin
@@ -216,6 +225,8 @@ export const typeDefs = `#graphql
     confirmedFeedbacks: [Feedback!]!
     """Current user's own submitted feedback (with any vendor reply)."""
     myFeedbacks: [Feedback!]!
+    """Price change history for a menu item (newest first). Returns all entries if no menuItemId given."""
+    priceHistory(menuItemId: ID): [PriceHistoryEntry!]!
   }
 
   # Mutations

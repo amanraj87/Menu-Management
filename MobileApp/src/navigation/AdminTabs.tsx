@@ -3,6 +3,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { AdminWeekScreen } from '../screens/admin/AdminWeekScreen';
 import { AdminUsersScreen } from '../screens/admin/AdminUsersScreen';
 import { AdminFeedbackScreen } from '../screens/admin/AdminFeedbackScreen';
+import { AdminPriceHistoryScreen } from '../screens/admin/AdminPriceHistoryScreen';
 import { ViewMenuScreen } from '../screens/shared/ViewMenuScreen';
 import { tabIcon, tabScreenOptions } from './tabs';
 
@@ -30,6 +31,11 @@ export function AdminTabs() {
         name="Menu"
         component={ViewMenuScreen}
         options={{ tabBarIcon: tabIcon('📖') }}
+      />
+      <Tab.Screen
+        name="Prices"
+        component={AdminPriceHistoryScreen}
+        options={{ tabBarIcon: tabIcon('📊'), tabBarLabel: 'Prices' }}
       />
     </Tab.Navigator>
   );
