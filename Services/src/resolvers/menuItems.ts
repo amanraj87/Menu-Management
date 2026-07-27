@@ -1,10 +1,51 @@
 import { ObjectId } from 'mongodb'
+import type { Db } from 'mongodb'
 import { getDb } from '../db.js'
 import { COLLECTIONS } from '../constants/collections.js'
 import { sendToUsers, userIdsByRole } from '../services/fcm.js'
 import type { ContextUser } from '../types.js'
 import type { MealType } from '../types.js'
 import type { MenuItemDoc, PriceHistoryDoc } from '../types.js'
+
+/**
+ * Record a price change for a dish, keyed by NAME rather than per menu-item
+ * record. A "dish" spans up to three menu_item records (breakfast/lunch/dinner),
+ * so create/update fan out across those records and the vendor UI issues one
+ * mutation per meal. This collapses that fan-out into a single history entry and
+ * ignores non-price edits (e.g. adding/removing a meal type at the same price):
+ *
+ *  - The dish's previous price is taken from its own latest history entry, so
+ *    the log reads oldPrice → newPrice for the dish as a whole.
+ *  - If the price is unchanged (the 2nd/3rd meal record in a fan-out, or a pure
+ *    meal-type edit) nothing is written.
+ *
+ * Returns true only when a new entry was actually inserted (i.e. this call is
+ * the genuine, first-seen change), so callers can also de-duplicate side
+ * effects such as notifications.
+ */
+async function recordPriceChange(
+  db: Db,
+  menuItemId: ObjectId,
+  name: string,
+  newPrice: number,
+): Promise<boolean> {
+  const latest = (await db
+    .collection(COLLECTIONS.price_history)
+    .find({ menuItemName: name })
+    .sort({ changedAt: -1 })
+    .limit(1)
+    .next()) as PriceHistoryDoc | null
+  const oldPrice = latest?.newPrice ?? null
+  if (oldPrice === newPrice) return false
+  await db.collection(COLLECTIONS.price_history).insertOne({
+    menuItemId,
+    menuItemName: name,
+    oldPrice,
+    newPrice,
+    changedAt: new Date(),
+  })
+  return true
+}
 
 function toMenuItem(doc: MenuItemDoc | null): Record<string, unknown> | null {
   if (!doc) return null
@@ -54,13 +95,7 @@ export async function createMenuItem(
   const inserted = await db.collection(COLLECTIONS.menu_items).findOne({ _id: insertedId }) as MenuItemDoc
 
   if (args.input.pricePerUnit != null) {
-    await db.collection(COLLECTIONS.price_history).insertOne({
-      menuItemId: insertedId,
-      menuItemName: args.input.name,
-      oldPrice: null,
-      newPrice: args.input.pricePerUnit,
-      changedAt: now,
-    })
+    await recordPriceChange(db, insertedId, args.input.name, args.input.pricePerUnit)
   }
 
   const admins = await userIdsByRole('admin')
@@ -103,24 +138,24 @@ export async function updateMenuItem(
       args.input.pricePerUnit !== undefined &&
       existing?.pricePerUnit !== updated.pricePerUnit
 
-    if (priceChanged) {
-      await db.collection(COLLECTIONS.price_history).insertOne({
-        menuItemId: _id,
-        menuItemName: updated.name,
-        oldPrice: existing?.pricePerUnit ?? null,
-        newPrice: updated.pricePerUnit ?? null,
-        changedAt: new Date(),
-      })
-    }
+    // Log the change once per dish (recordPriceChange de-dupes the per-meal-type
+    // fan-out). priceLogged is true only for the first, genuine change so the
+    // notification below fires once too.
+    const priceLogged =
+      priceChanged && updated.pricePerUnit != null
+        ? await recordPriceChange(db, _id, updated.name, updated.pricePerUnit)
+        : false
 
     const admins = await userIdsByRole('admin')
     if (priceChanged) {
-      await sendToUsers(
-        admins,
-        'Vendor changed a meal price',
-        `${updated.name} is now ₹${updated.pricePerUnit}`,
-        { type: 'menuPrice', menuItemId: args.id },
-      )
+      if (priceLogged) {
+        await sendToUsers(
+          admins,
+          'Vendor changed a meal price',
+          `${updated.name} is now ₹${updated.pricePerUnit}`,
+          { type: 'menuPrice', menuItemId: args.id },
+        )
+      }
     } else {
       const changes: string[] = []
       if (args.input.name !== undefined && args.input.name !== existing?.name)
