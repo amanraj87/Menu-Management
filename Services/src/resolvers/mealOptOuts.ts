@@ -1,7 +1,8 @@
 import { ObjectId } from 'mongodb'
 import { getDb } from '../db.js'
 import { COLLECTIONS } from '../constants/collections.js'
-import type { ContextUser, MealType, MealOptOutDoc } from '../types.js'
+import { sendToUsers, userIdsByRole } from '../services/fcm.js'
+import type { ContextUser, MealType, MealOptOutDoc, UserDoc } from '../types.js'
 
 export async function myMealOptOuts(
   _: unknown,
@@ -48,6 +49,21 @@ export async function toggleMealOptOut(
       filter,
       { $setOnInsert: { ...filter, createdAt: new Date() } },
       { upsert: true }
+    )
+
+    // Notify admins that a person has skipped (toggled off) an upcoming meal.
+    // Only on opt-out (not on re-enabling); best-effort, never blocks the toggle.
+    const person = (await db
+      .collection(COLLECTIONS.users)
+      .findOne({ _id: new ObjectId(user.userId) })) as UserDoc | null
+    const name = person?.name ?? 'Someone'
+    const meal = args.mealType.charAt(0).toUpperCase() + args.mealType.slice(1)
+    const admins = await userIdsByRole('admin')
+    await sendToUsers(
+      admins,
+      'A meal was skipped',
+      `${name} skipped ${meal} on ${args.date}`,
+      { type: 'mealOptOut', date: args.date, mealType: args.mealType },
     )
   } else {
     await db.collection(COLLECTIONS.meal_opt_outs).deleteOne(filter)
