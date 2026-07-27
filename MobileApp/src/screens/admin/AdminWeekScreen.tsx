@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Screen } from '../../ui/Screen';
 import { Button, Card, Loader, SectionLabel } from '../../ui';
@@ -13,6 +13,7 @@ import {
   TOGGLE_MEAL_CANCELLATION,
   UPDATE_ADMIN_DAY_COMMENT,
   UPDATE_SETTINGS,
+  REMIND_NOT_EATEN,
 } from '../../api/operations';
 import { useMenuItems, useUsers, useSettings, useMealCancellationsForRange, useVendorDayNotesForRange } from '../../api/hooks';
 import { colors, font, mealMeta, radius, spacing } from '../../theme';
@@ -70,6 +71,7 @@ function WhoChose({ breakdown }: { breakdown: PersonShare[] }) {
 
 export function AdminWeekScreen() {
   const toast = useToast();
+  const [remindPending, setRemindPending] = useState(false);
   const [wkStart, setWkStart] = useState(() => getWeekStart(todayISO()));
   // Live combined user selections keyed by `${date}|${meal}` → (menuItemId → info).
   const [aggByKey, setAggByKey] = useState<Record<string, Record<string, AggInfo>>>({});
@@ -377,11 +379,48 @@ export function AdminWeekScreen() {
     return sum + ((finalAmt != null && Math.round(finalAmt) !== Math.round(computed)) ? finalAmt : computed);
   }, 0);
 
+  const remindMeal = async (mealType: MealType) => {
+    setRemindPending(true);
+    try {
+      const res = await gqlRequest<{ remindNotEaten: number }>(REMIND_NOT_EATEN, { date: today, mealType });
+      const n = res.remindNotEaten ?? 0;
+      const label = mealType.charAt(0).toUpperCase() + mealType.slice(1);
+      toast.show(
+        n > 0 ? `${label} reminder sent to ${n} ${n === 1 ? 'person' : 'people'}.` : `Nobody to remind — everyone logged ${label.toLowerCase()}.`,
+        n > 0 ? 'success' : 'info',
+      );
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setRemindPending(false);
+    }
+  };
+
+  const promptRemind = () => {
+    Alert.alert("Remind who hasn't eaten", 'Send a reminder for which meal today?', [
+      { text: 'Breakfast', onPress: () => remindMeal('breakfast') },
+      { text: 'Lunch', onPress: () => remindMeal('lunch') },
+      { text: 'Dinner', onPress: () => remindMeal('dinner') },
+    ]);
+  };
+
   return (
     <Screen
       title="Week"
       subtitle="Combined user selections"
-      headerRight={<SignOutButton />}
+      headerRight={
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={promptRemind}
+            disabled={remindPending}
+            hitSlop={8}
+            accessibilityLabel="Remind users to update today's eaten status"
+            style={styles.bellBtn}>
+            <Text style={[styles.bellIcon, remindPending && styles.bellIconBusy]}>🔔</Text>
+          </Pressable>
+          <SignOutButton />
+        </View>
+      }
       refreshing={loading}
       onRefresh={load}>
       {/* Settings (collapsible) */}
@@ -710,6 +749,10 @@ export function AdminWeekScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  bellBtn: { padding: 2 },
+  bellIcon: { fontSize: 20 },
+  bellIconBusy: { opacity: 0.5 },
   settingsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   settingsTitle: { color: colors.text, fontSize: font.body, fontWeight: '700' },
   settingsSummary: { color: colors.textMuted, fontSize: font.tiny },

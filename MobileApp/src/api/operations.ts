@@ -33,7 +33,7 @@ export const CREATE_USER = `
 export const MENU_ITEMS = `
   query MenuItems($mealType: MealType) {
     menuItems(mealType: $mealType) {
-      id name mealType unit pricePerUnit offered createdAt updatedAt
+      id name mealType unit pricePerUnit offeredDays createdAt updatedAt
     }
   }
 `;
@@ -41,7 +41,7 @@ export const MENU_ITEMS = `
 export const CREATE_MENU_ITEM = `
   mutation CreateMenuItem($input: CreateMenuItemInput!) {
     createMenuItem(input: $input) {
-      id name mealType unit pricePerUnit offered createdAt updatedAt
+      id name mealType unit pricePerUnit offeredDays createdAt updatedAt
     }
   }
 `;
@@ -49,16 +49,22 @@ export const CREATE_MENU_ITEM = `
 export const UPDATE_MENU_ITEM = `
   mutation UpdateMenuItem($id: ID!, $input: UpdateMenuItemInput!) {
     updateMenuItem(id: $id, input: $input) {
-      id name mealType unit pricePerUnit offered createdAt updatedAt
+      id name mealType unit pricePerUnit offeredDays createdAt updatedAt
     }
   }
 `;
 
-export const SET_MENU_ITEM_OFFERED = `
-  mutation SetMenuItemOffered($id: ID!, $offered: Boolean!) {
-    setMenuItemOffered(id: $id, offered: $offered) {
-      id offered
+export const SET_MENU_ITEM_OFFERED_DAYS = `
+  mutation SetMenuItemOfferedDays($id: ID!, $days: [Int!]!) {
+    setMenuItemOfferedDays(id: $id, days: $days) {
+      id offeredDays
     }
+  }
+`;
+
+export const REMIND_NOT_EATEN = `
+  mutation RemindNotEaten($date: String!, $mealType: MealType!) {
+    remindNotEaten(date: $date, mealType: $mealType)
   }
 `;
 

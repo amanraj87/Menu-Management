@@ -263,9 +263,10 @@ export function PersonWeekScreen() {
       selectedForMeal(activeDay, sheetMeal).map(r => r.itemId),
     );
     const q = search.trim().toLowerCase();
+    // Users can only add dishes the admin allows on this day's weekday.
+    const weekday = new Date(activeDay + 'T00:00:00Z').getUTCDay();
     return menu.items
-      // Users can only add dishes the admin has made available (offered).
-      .filter(i => i.mealType === sheetMeal && i.offered && !chosen.has(i._id))
+      .filter(i => i.mealType === sheetMeal && i.offeredDays.includes(weekday) && !chosen.has(i._id))
       .filter(i => !q || i.name.toLowerCase().includes(q));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheetMeal, menu.items, search, quantities, activeDay]);

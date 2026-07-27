@@ -11,14 +11,14 @@ export function toUser(g: { id: string; name: string; email: string; role: strin
   }
 }
 
-export function toMenuItem(g: { id: string; name: string; mealType: string; unit: string; pricePerUnit?: number | null; offered?: boolean | null; createdAt?: string | null; updatedAt?: string | null }): MenuItem {
+export function toMenuItem(g: { id: string; name: string; mealType: string; unit: string; pricePerUnit?: number | null; offeredDays?: number[] | null; createdAt?: string | null; updatedAt?: string | null }): MenuItem {
   return {
     _id: g.id,
     name: g.name,
     mealType: g.mealType as MenuItem['mealType'],
     unit: g.unit,
     pricePerUnit: g.pricePerUnit ?? undefined,
-    offered: g.offered ?? true,
+    offeredDays: g.offeredDays ?? [0, 1, 2, 3, 4, 5, 6],
     createdAt: g.createdAt ?? undefined,
     updatedAt: g.updatedAt ?? undefined,
   }

@@ -15,8 +15,8 @@ export interface MenuItem {
   mealType: MealType
   unit: string
   pricePerUnit?: number
-  /** Admin-controlled: whether users may choose this dish. Defaults to true. */
-  offered: boolean
+  /** Admin-controlled: weekdays (0=Sun … 6=Sat) users may choose this dish on. */
+  offeredDays: number[]
   createdAt?: string
   updatedAt?: string
 }

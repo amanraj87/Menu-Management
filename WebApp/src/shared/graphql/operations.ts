@@ -71,18 +71,18 @@ export const MENU_ITEMS = gql`
       mealType
       unit
       pricePerUnit
-      offered
+      offeredDays
       createdAt
       updatedAt
     }
   }
 `
 
-export const SET_MENU_ITEM_OFFERED = gql`
-  mutation SetMenuItemOffered($id: ID!, $offered: Boolean!) {
-    setMenuItemOffered(id: $id, offered: $offered) {
+export const SET_MENU_ITEM_OFFERED_DAYS = gql`
+  mutation SetMenuItemOfferedDays($id: ID!, $days: [Int!]!) {
+    setMenuItemOfferedDays(id: $id, days: $days) {
       id
-      offered
+      offeredDays
     }
   }
 `
@@ -95,7 +95,7 @@ export const CREATE_MENU_ITEM = gql`
       mealType
       unit
       pricePerUnit
-      offered
+      offeredDays
       createdAt
       updatedAt
     }
@@ -110,7 +110,7 @@ export const UPDATE_MENU_ITEM = gql`
       mealType
       unit
       pricePerUnit
-      offered
+      offeredDays
       createdAt
       updatedAt
     }
@@ -261,6 +261,12 @@ export const CONFIRMED_ORDERS = gql`
       confirmedBy
       confirmedAt
     }
+  }
+`
+
+export const REMIND_NOT_EATEN = gql`
+  mutation RemindNotEaten($date: String!, $mealType: MealType!) {
+    remindNotEaten(date: $date, mealType: $mealType)
   }
 `
 

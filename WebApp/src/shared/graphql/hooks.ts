@@ -10,7 +10,7 @@ import {
   CREATE_MENU_ITEM,
   UPDATE_MENU_ITEM,
   DELETE_MENU_ITEM,
-  SET_MENU_ITEM_OFFERED,
+  SET_MENU_ITEM_OFFERED_DAYS,
   MY_SELECTION,
   MY_SELECTIONS_FOR_WEEK,
   PUT_SELECTION,
@@ -119,7 +119,7 @@ export function useCreateUser(onSuccess?: () => void, onError?: (e: Error) => vo
   }
 }
 
-interface MenuItemsData { menuItems: Array<{ id: string; name: string; mealType: string; unit: string; pricePerUnit?: number | null; offered?: boolean | null; createdAt?: string | null; updatedAt?: string | null }> }
+interface MenuItemsData { menuItems: Array<{ id: string; name: string; mealType: string; unit: string; pricePerUnit?: number | null; offeredDays?: number[] | null; createdAt?: string | null; updatedAt?: string | null }> }
 export function useMenuItems(mealType?: MealType) {
   const { data, loading, error } = useQuery<MenuItemsData>(MENU_ITEMS, {
     variables: mealType ? { mealType } : {},
@@ -128,10 +128,10 @@ export function useMenuItems(mealType?: MealType) {
   return { items, isLoading: loading, error }
 }
 
-export function useSetMenuItemOffered() {
-  const [mutate, result] = useMutation(SET_MENU_ITEM_OFFERED)
+export function useSetMenuItemOfferedDays() {
+  const [mutate, result] = useMutation(SET_MENU_ITEM_OFFERED_DAYS)
   return {
-    setOffered: (id: string, offered: boolean) => mutate({ variables: { id, offered } }),
+    setOfferedDays: (id: string, days: number[]) => mutate({ variables: { id, days } }),
     isPending: result.loading,
     error: result.error,
   }

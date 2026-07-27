@@ -125,7 +125,7 @@ const toMenuItem = (g: any): MenuItem => ({
   mealType: g.mealType,
   unit: g.unit,
   pricePerUnit: g.pricePerUnit ?? undefined,
-  offered: g.offered ?? true,
+  offeredDays: g.offeredDays ?? [0, 1, 2, 3, 4, 5, 6],
   createdAt: g.createdAt ?? undefined,
   updatedAt: g.updatedAt ?? undefined,
 });
