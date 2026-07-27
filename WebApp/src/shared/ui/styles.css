@@ -681,3 +681,116 @@ select.input option,
 
 /* Utility: hide on desktop (show menu button only on mobile) */
 @media (min-width: 768px) { .md\:hidden { display: none !important; } }
+
+/* ── Vendor menu manager ─────────────────────────────────────────────── */
+.menu-toolbar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 1.25rem 0;
+}
+.menu-search { position: relative; flex: 1; min-width: 200px; }
+.menu-search .input { padding-left: 2.4rem; }
+.menu-search__icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+  display: flex;
+}
+.menu-count { color: var(--color-text-muted); font-size: 0.8125rem; white-space: nowrap; }
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.icon-btn:hover:not(:disabled) { background: var(--color-bg); color: var(--color-text); }
+.icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.icon-btn--edit:hover:not(:disabled) { color: var(--color-primary); }
+.icon-btn--danger:hover:not(:disabled) { color: var(--color-danger); }
+
+.menu-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--color-text-muted);
+}
+.menu-empty__icon { font-size: 2.5rem; margin: 0 0 0.5rem; }
+
+/* ── Admin menu offerings (toggle switch) ────────────────────────────── */
+.offer-summary {
+  margin: 0.25rem 0 1rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+.offer-summary strong { color: var(--color-primary); }
+.offer-hidden-tag {
+  margin-left: 0.5rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+  vertical-align: middle;
+}
+.switch {
+  flex-shrink: 0;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  border: none;
+  padding: 0;
+  background: var(--color-secondary);
+  cursor: pointer;
+  position: relative;
+  transition: background 0.18s ease;
+}
+.switch:disabled { opacity: 0.6; cursor: default; }
+.switch__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.18s ease;
+}
+.switch--on { background: var(--color-primary); }
+.switch--on .switch__thumb { transform: translateX(18px); }
+
+/* ── Admin menu offerings — dish rows ────────────────────────────────── */
+.menu-list {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.menu-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.7rem 1rem;
+  border-top: 1px solid var(--color-border);
+}
+.menu-row:first-child { border-top: none; }
+.menu-row:hover { background: rgba(255, 255, 255, 0.02); }
+.menu-row__name { font-weight: 600; flex: 1; min-width: 0; word-break: break-word; }
+.menu-row__price { width: 120px; text-align: right; flex-shrink: 0; white-space: nowrap; }
+.menu-row__price .amount { font-weight: 700; color: var(--color-text); }
+.menu-row__price .amount--none { color: var(--color-text-muted); }
+.menu-row__price .unit { color: var(--color-text-muted); font-size: 0.8rem; }

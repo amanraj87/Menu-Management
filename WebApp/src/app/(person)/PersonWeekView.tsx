@@ -570,8 +570,9 @@ export function PersonWeekView() {
         const dateStr = openAddItemKey.slice(0, 10)
         const mealId = openAddItemKey.slice(11) as MealType
         const allMealItems = menuByMeal[mealId] ?? []
+        // Users can only add dishes the admin has made available (offered).
         const unselectedItems = allMealItems.filter(
-          (item: MenuItem) => (quantities[qtyKey(dateStr, mealId, item._id)] ?? 0) === 0
+          (item: MenuItem) => item.offered && (quantities[qtyKey(dateStr, mealId, item._id)] ?? 0) === 0
         )
         const search = addItemSearch[openAddItemKey] ?? ''
         const filtered = [...unselectedItems]

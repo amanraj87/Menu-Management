@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useApolloClient } from '@apollo/client/react'
-import { Card, Table, Thead, Tbody, Tr, Th, Td, Button, Input, Loader } from '@/shared/ui'
+import { Badge, Card, Table, Thead, Tbody, Tr, Th, Td, Button, Input, Loader, Modal } from '@/shared/ui'
 import type { MealType, MenuItem } from '@/shared/types'
 import { useMenuItems } from '@/shared/graphql/hooks'
 import { CREATE_MENU_ITEM, UPDATE_MENU_ITEM, DELETE_MENU_ITEM, MENU_ITEMS } from '@/shared/graphql/operations'
@@ -8,6 +8,33 @@ import { useToastStore } from '@/shared/stores/toastStore'
 
 const ALL_MEALS: MealType[] = ['breakfast', 'lunch', 'dinner']
 const UNIT_OPTIONS = ['portion', 'piece', 'kg', 'plate', 'bowl']
+
+const mealLabel = (m: MealType) => m.charAt(0).toUpperCase() + m.slice(1)
+/** Sort a set of meals into canonical breakfast → lunch → dinner order. */
+const sortMeals = (meals: MealType[]) => ALL_MEALS.filter((m) => meals.includes(m))
+
+const EditIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+  </svg>
+)
+
+const TrashIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M3 6h18" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
+  </svg>
+)
+
+const SearchIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="11" cy="11" r="8" />
+    <path d="m21 21-4.3-4.3" />
+  </svg>
+)
 
 /** A distinct dish in the shared menu and its underlying per-meal MenuItem records. */
 type CatalogDish = {
@@ -24,6 +51,7 @@ export function VendorMenuManager() {
   const [formName, setFormName] = useState('')
   const [formUnit, setFormUnit] = useState('portion')
   const [formPricePerUnit, setFormPricePerUnit] = useState('')
+  const [formMeals, setFormMeals] = useState<MealType[]>(ALL_MEALS)
   const [menuSearch, setMenuSearch] = useState('')
   const [busy, setBusy] = useState(false)
   const toast = useToastStore()
@@ -35,8 +63,12 @@ export function VendorMenuManager() {
     setFormName('')
     setFormUnit('portion')
     setFormPricePerUnit('')
+    setFormMeals(ALL_MEALS)
     setEditingDish(null)
   }
+
+  const toggleFormMeal = (m: MealType) =>
+    setFormMeals((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : sortMeals([...prev, m])))
 
   // Shared menu = distinct dishes (by name), each with its meals + records.
   const catalog: CatalogDish[] = useMemo(() => {
@@ -72,6 +104,7 @@ export function VendorMenuManager() {
     setFormName(dish.name)
     setFormUnit(dish.unit)
     setFormPricePerUnit(dish.pricePerUnit != null ? String(dish.pricePerUnit) : '')
+    setFormMeals(sortMeals(dish.meals))
     setFormOpen(true)
   }
 
@@ -89,24 +122,41 @@ export function VendorMenuManager() {
     if (!name) { toast.add('Enter a dish name.', 'warning'); return }
     const price = parsePrice()
     if (price === null) { toast.add('Price must be a number.', 'warning'); return }
+    if (price === undefined) { toast.add('Enter a price per unit.', 'warning'); return }
     const unit = formUnit.trim() || 'portion'
+    if (formMeals.length === 0) { toast.add('Pick at least one meal type.', 'warning'); return }
 
     setBusy(true)
     try {
       if (editingDish) {
-        // Update every existing record for this dish (across whatever meals it's in).
+        // Reconcile this dish's per-meal records against the selected meals:
+        // create newly-added meals, delete removed ones, update the rest.
+        const existingByMeal = new Map(editingDish.items.map((r) => [r.mealType, r]))
+        for (const mealType of formMeals) {
+          const rec = existingByMeal.get(mealType)
+          if (rec) {
+            await client.mutate({
+              mutation: UPDATE_MENU_ITEM,
+              variables: { id: rec._id, input: { name, mealType, unit, pricePerUnit: price } },
+            })
+          } else {
+            await client.mutate({
+              mutation: CREATE_MENU_ITEM,
+              variables: { input: { name, mealType, unit, pricePerUnit: price } },
+            })
+          }
+        }
         for (const rec of editingDish.items) {
-          await client.mutate({
-            mutation: UPDATE_MENU_ITEM,
-            variables: { id: rec._id, input: { name, mealType: rec.mealType, unit, pricePerUnit: price } },
-          })
+          if (!formMeals.includes(rec.mealType)) {
+            await client.mutate({ mutation: DELETE_MENU_ITEM, variables: { id: rec._id } })
+          }
         }
         toast.add('Dish updated.', 'success')
       } else {
         const dup = catalog.some((d) => d.name.trim().toLowerCase() === name.toLowerCase())
         if (dup) { toast.add(`"${name}" is already on the menu.`, 'warning'); setBusy(false); return }
-        // A dish is available for every meal.
-        for (const mealType of ALL_MEALS) {
+        // Create a record for each selected meal type.
+        for (const mealType of formMeals) {
           await client.mutate({
             mutation: CREATE_MENU_ITEM,
             variables: { input: { name, mealType, unit, pricePerUnit: price } },
@@ -152,104 +202,168 @@ export function VendorMenuManager() {
         <div>
           <h3 className="card-title" style={{ marginTop: 0 }}>Menu</h3>
           <p className="content-subtitle" style={{ margin: 0 }}>
-            Your full list of dishes. Each dish is available for breakfast, lunch and dinner.
+            Your full list of dishes. Choose which meals each dish is available for.
           </p>
         </div>
-        {!formOpen && <Button onClick={openAdd}>+ Add new dish</Button>}
+        <Button onClick={openAdd}>+ Add new dish</Button>
       </div>
+
+      <Modal
+        open={formOpen}
+        onClose={() => { setFormOpen(false); resetForm() }}
+        title={editingDish ? `Edit “${editingDish.name}”` : 'Add a dish'}
+        footer={null}
+      >
+        <form
+          onSubmit={submitForm}
+          style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
+        >
+          <Input
+            label="Name"
+            value={formName}
+            onChange={(e) => setFormName(e.target.value)}
+            placeholder="e.g. Chicken Biryani"
+            required
+          />
+          <div>
+            <label className="input-label">Available for</label>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {ALL_MEALS.map((m) => {
+                const active = formMeals.includes(m)
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => toggleFormMeal(m)}
+                    aria-pressed={active}
+                    className={`btn btn-sm ${active ? '' : 'btn-ghost'}`}
+                  >
+                    {active ? '✓ ' : ''}{mealLabel(m)}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 130 }}>
+              <label className="input-label">Unit</label>
+              <input
+                list="unit-options"
+                className="input"
+                style={{ width: '100%' }}
+                value={formUnit}
+                onChange={(e) => setFormUnit(e.target.value)}
+                placeholder="e.g. portion (type any)"
+              />
+            </div>
+            <div style={{ width: 130 }}>
+              <label className="input-label">Price</label>
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                value={formPricePerUnit}
+                onChange={(e) => setFormPricePerUnit(e.target.value)}
+                placeholder="e.g. 50"
+                required
+              />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+            <Button type="button" variant="ghost" onClick={() => { setFormOpen(false); resetForm() }}>Cancel</Button>
+            <Button type="submit" disabled={busy}>{editingDish ? 'Save' : 'Add dish'}</Button>
+          </div>
+        </form>
+      </Modal>
 
       {isLoading ? (
         <Loader />
       ) : (
         <>
-          {formOpen && (
-            <form
-              onSubmit={submitForm}
-              style={{
-                display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1rem',
-                margin: '1rem 0 1.25rem', border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius)', background: 'var(--color-bg)',
-              }}
-            >
-              <strong style={{ fontSize: '0.9375rem' }}>{editingDish ? `Edit “${editingDish.name}”` : 'Add a dish'}</strong>
-              <Input
-                label="Name"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder="e.g. Chicken Biryani"
-                required
-              />
-              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: 130 }}>
-                  <label className="input-label">Unit</label>
-                  <input
-                    list="unit-options"
-                    className="input"
-                    style={{ width: '100%' }}
-                    value={formUnit}
-                    onChange={(e) => setFormUnit(e.target.value)}
-                    placeholder="e.g. portion (type any)"
-                  />
-                </div>
-                <div style={{ width: 130 }}>
-                  <label className="input-label">Price</label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={formPricePerUnit}
-                    onChange={(e) => setFormPricePerUnit(e.target.value)}
-                    placeholder="e.g. 50"
-                  />
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                <Button type="button" variant="ghost" onClick={() => { setFormOpen(false); resetForm() }}>Cancel</Button>
-                <Button type="submit" disabled={busy}>{editingDish ? 'Save' : 'Add dish'}</Button>
-              </div>
-            </form>
-          )}
-
           {catalog.length > 0 && (
-            <div style={{ margin: '1rem 0' }}>
-              <Input
-                type="search"
-                value={menuSearch}
-                onChange={(e) => setMenuSearch(e.target.value)}
-                placeholder="Search dishes…"
-              />
+            <div className="menu-toolbar">
+              <div className="menu-search">
+                <span className="menu-search__icon"><SearchIcon /></span>
+                <Input
+                  type="search"
+                  value={menuSearch}
+                  onChange={(e) => setMenuSearch(e.target.value)}
+                  placeholder="Search dishes…"
+                />
+              </div>
+              <span className="menu-count">
+                {menuFiltered.length} dish{menuFiltered.length !== 1 ? 'es' : ''}
+              </span>
             </div>
           )}
 
           {catalog.length === 0 ? (
-            <p className="content-subtitle" style={{ margin: 0 }}>No dishes yet. Tap “Add new dish” to create one.</p>
+            <div className="menu-empty">
+              <p className="menu-empty__icon">🍽️</p>
+              <p style={{ margin: 0, fontWeight: 600, color: 'var(--color-text)' }}>Your menu is empty</p>
+              <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem' }}>Tap “Add new dish” to create your first dish.</p>
+            </div>
           ) : menuFiltered.length === 0 ? (
-            <p className="content-subtitle" style={{ margin: 0 }}>No dishes match “{menuSearch.trim()}”.</p>
+            <div className="menu-empty">
+              <p className="menu-empty__icon">🔎</p>
+              <p style={{ margin: 0 }}>No dishes match “{menuSearch.trim()}”.</p>
+            </div>
           ) : (
             <Table>
               <Thead>
                 <Tr>
                   <Th>Dish</Th>
+                  <Th>Meals</Th>
                   <Th>Unit</Th>
                   <Th>Price</Th>
-                  <Th aria-label="Edit" />
-                  <Th aria-label="Remove" />
+                  <Th aria-label="Actions" />
                 </Tr>
               </Thead>
               <Tbody>
-                {menuFiltered.map((dish) => (
-                  <Tr key={dish.name}>
-                    <Td>{dish.name}</Td>
-                    <Td>{dish.unit}</Td>
-                    <Td>{dish.pricePerUnit != null ? dish.pricePerUnit : '—'}</Td>
-                    <Td>
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => openEditDish(dish)}>Edit</button>
-                    </Td>
-                    <Td>
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeDish(dish)} disabled={busy}>Remove</button>
-                    </Td>
-                  </Tr>
-                ))}
+                {menuFiltered.map((dish) => {
+                  const meals = sortMeals(dish.meals)
+                  return (
+                    <Tr key={dish.name}>
+                      <Td>{dish.name}</Td>
+                      <Td>
+                        <span style={{ display: 'inline-flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                          {meals.length === ALL_MEALS.length ? (
+                            <Badge variant="info">All meals</Badge>
+                          ) : (
+                            meals.map((m) => (
+                              <Badge key={m} variant="default">{mealLabel(m)}</Badge>
+                            ))
+                          )}
+                        </span>
+                      </Td>
+                      <Td>{dish.unit}</Td>
+                      <Td>{dish.pricePerUnit != null ? `₹${dish.pricePerUnit}` : '—'}</Td>
+                      <Td>
+                        <span style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                          <button
+                            type="button"
+                            className="icon-btn icon-btn--edit"
+                            onClick={() => openEditDish(dish)}
+                            title={`Edit ${dish.name}`}
+                            aria-label={`Edit ${dish.name}`}
+                          >
+                            <EditIcon />
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-btn icon-btn--danger"
+                            onClick={() => removeDish(dish)}
+                            disabled={busy}
+                            title={`Remove ${dish.name}`}
+                            aria-label={`Remove ${dish.name}`}
+                          >
+                            <TrashIcon />
+                          </button>
+                        </span>
+                      </Td>
+                    </Tr>
+                  )
+                })}
               </Tbody>
             </Table>
           )}

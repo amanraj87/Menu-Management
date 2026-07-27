@@ -4,7 +4,7 @@ import { AdminWeekScreen } from '../screens/admin/AdminWeekScreen';
 import { AdminUsersScreen } from '../screens/admin/AdminUsersScreen';
 import { AdminFeedbackScreen } from '../screens/admin/AdminFeedbackScreen';
 import { AdminPriceHistoryScreen } from '../screens/admin/AdminPriceHistoryScreen';
-import { ViewMenuScreen } from '../screens/shared/ViewMenuScreen';
+import { AdminMenuScreen } from '../screens/admin/AdminMenuScreen';
 import { tabIcon, tabScreenOptions } from './tabs';
 
 const Tab = createBottomTabNavigator();
@@ -29,7 +29,7 @@ export function AdminTabs() {
       />
       <Tab.Screen
         name="Menu"
-        component={ViewMenuScreen}
+        component={AdminMenuScreen}
         options={{ tabBarIcon: tabIcon('📖') }}
       />
       <Tab.Screen

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Card, Loader, Modal } from '@/shared/ui'
 import type { MealType, MenuItem } from '@/shared/types'
-import { useMenuItems, useMySelectionsForWeek, useMyMealDoneForWeek, useMarkMealDone, useMealDoneStatus, useConfirmedOrders, useMealCancellationsForRange } from '@/shared/graphql/hooks'
+import { useMenuItems, useMySelectionsForWeek, useMyMealDoneForWeek, useMarkMealDone, useMealDoneStatus, useAggregatedOrder, useMealCancellationsForRange } from '@/shared/graphql/hooks'
 import { useToastStore } from '@/shared/stores/toastStore'
 import { Link } from 'react-router-dom'
 
@@ -38,7 +38,6 @@ export function PersonTodayView() {
   const { selections, isLoading: weekLoading } = useMySelectionsForWeek(startDate)
   const { doneList, isLoading: doneLoading } = useMyMealDoneForWeek(startDate)
   const { mutate: markDoneMutate } = useMarkMealDone()
-  const { orders: confirmedToday } = useConfirmedOrders(today)
   const { cancellations } = useMealCancellationsForRange(today, today)
   const isMealCancelled = (meal: MealType) => cancellations.some((c) => c.date === today && c.mealType === meal)
   const doneStatus = {
@@ -46,18 +45,23 @@ export function PersonTodayView() {
     lunch: useMealDoneStatus(today, 'lunch'),
     dinner: useMealDoneStatus(today, 'dinner'),
   }
+  // Attendance uses the LIVE aggregated selections (same source as each user's
+  // own "today" list) so the dishes shown here match the today page. Confirmed
+  // orders are a snapshot from "Send to Shefs" and can lag current selections.
+  const agg = {
+    breakfast: useAggregatedOrder(today, 'breakfast'),
+    lunch: useAggregatedOrder(today, 'lunch'),
+    dinner: useAggregatedOrder(today, 'dinner'),
+  }
 
   const [localDone, setLocalDone] = useState<Set<string>>(new Set())
   const [attendanceMeal, setAttendanceMeal] = useState<MealType | null>(null)
 
-  /** Everyone who ordered a given meal today (from the confirmed order breakdown). */
+  /** Everyone who ordered a given meal today (from the live aggregated selections). */
   const rosterFor = (meal: MealType): Array<{ userId: string; userName: string }> => {
     const map = new Map<string, string>()
-    for (const o of confirmedToday) {
-      if (o.mealType !== meal) continue
-      for (const it of o.items) {
-        for (const p of it.personBreakdown) map.set(p.userId, p.userName)
-      }
+    for (const it of agg[meal].aggregated.items) {
+      for (const p of it.personBreakdown) map.set(p.userId, p.userName)
     }
     // Include anyone who marked eaten even if not in the breakdown.
     for (const u of doneStatus[meal].doneUsers) map.set(u.userId, u.userName)
@@ -67,13 +71,10 @@ export function PersonTodayView() {
   /** menuItem dishes each person ordered for a given meal today. */
   const dishesByUserFor = (meal: MealType): Map<string, Array<{ name: string; quantity: number }>> => {
     const map = new Map<string, Array<{ name: string; quantity: number }>>()
-    for (const o of confirmedToday) {
-      if (o.mealType !== meal) continue
-      for (const it of o.items) {
-        for (const p of it.personBreakdown) {
-          if (!map.has(p.userId)) map.set(p.userId, [])
-          map.get(p.userId)!.push({ name: it.name, quantity: p.quantity })
-        }
+    for (const it of agg[meal].aggregated.items) {
+      for (const p of it.personBreakdown) {
+        if (!map.has(p.userId)) map.set(p.userId, [])
+        map.get(p.userId)!.push({ name: it.name, quantity: p.quantity })
       }
     }
     return map

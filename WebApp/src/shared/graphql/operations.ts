@@ -71,8 +71,18 @@ export const MENU_ITEMS = gql`
       mealType
       unit
       pricePerUnit
+      offered
       createdAt
       updatedAt
+    }
+  }
+`
+
+export const SET_MENU_ITEM_OFFERED = gql`
+  mutation SetMenuItemOffered($id: ID!, $offered: Boolean!) {
+    setMenuItemOffered(id: $id, offered: $offered) {
+      id
+      offered
     }
   }
 `
@@ -85,6 +95,7 @@ export const CREATE_MENU_ITEM = gql`
       mealType
       unit
       pricePerUnit
+      offered
       createdAt
       updatedAt
     }
@@ -99,6 +110,7 @@ export const UPDATE_MENU_ITEM = gql`
       mealType
       unit
       pricePerUnit
+      offered
       createdAt
       updatedAt
     }

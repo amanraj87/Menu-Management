@@ -19,6 +19,7 @@ const TYPE_TO_TAB: Record<string, string> = {
   feedbackReply: 'Feedback', // P2/A3 — reply landed
   vendorDayNote: 'Week', // A1 — vendor set a day's final amount
   menuPrice: 'Menu', // A2 — vendor changed a meal price
+  mealOptOut: 'Week', // admin — a person skipped an upcoming meal
 };
 
 // Held when a tap arrives before the navigator is ready (cold start).

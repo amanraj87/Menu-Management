@@ -13,6 +13,10 @@ import { MEAL_TYPES, type MealType, type MenuItem } from '../../types';
 
 const UNITS = ['portion', 'piece', 'kg', 'plate', 'bowl'];
 
+const mealLabel = (m: MealType) => m.charAt(0).toUpperCase() + m.slice(1);
+/** Sort a set of meals into canonical breakfast → lunch → dinner order. */
+const sortMeals = (meals: MealType[]) => MEAL_TYPES.filter(m => meals.includes(m));
+
 type CatalogDish = {
   name: string;
   unit: string;
@@ -30,6 +34,7 @@ export function VendorMenuScreen() {
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('portion');
   const [price, setPrice] = useState('');
+  const [meals, setMeals] = useState<MealType[]>(MEAL_TYPES);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -72,7 +77,11 @@ export function VendorMenuScreen() {
     setName('');
     setUnit('portion');
     setPrice('');
+    setMeals(MEAL_TYPES);
   };
+
+  const toggleMeal = (m: MealType) =>
+    setMeals(prev => (prev.includes(m) ? prev.filter(x => x !== m) : sortMeals([...prev, m])));
 
   const openAdd = () => {
     resetForm();
@@ -84,18 +93,28 @@ export function VendorMenuScreen() {
     setName(dish.name);
     setUnit(dish.unit);
     setPrice(dish.pricePerUnit != null ? String(dish.pricePerUnit) : '');
+    setMeals(sortMeals(dish.meals));
     setFormOpen(true);
   };
 
-  const validate = (): { name: string; unit: string; price?: number } | null => {
+  const validate = (): { name: string; unit: string; price: number } | null => {
     const trimmed = name.trim();
     if (!trimmed) {
       toast.show('Enter a dish name.', 'warning');
       return null;
     }
-    const parsedPrice = price.trim() ? Number(price) : undefined;
-    if (parsedPrice != null && isNaN(parsedPrice)) {
-      toast.show('Price must be a number.', 'warning');
+    const trimmedPrice = price.trim();
+    if (!trimmedPrice) {
+      toast.show('Enter a price per unit.', 'warning');
+      return null;
+    }
+    const parsedPrice = Number(trimmedPrice);
+    if (isNaN(parsedPrice) || parsedPrice < 0) {
+      toast.show('Price must be a valid number.', 'warning');
+      return null;
+    }
+    if (meals.length === 0) {
+      toast.show('Pick at least one meal type.', 'warning');
       return null;
     }
     return { name: trimmed, unit: unit.trim() || 'portion', price: parsedPrice };
@@ -107,11 +126,26 @@ export function VendorMenuScreen() {
     setSaving(true);
     try {
       if (editingDish) {
+        // Reconcile this dish's per-meal records against the selected meals:
+        // create newly-added meals, delete removed ones, update the rest.
+        const existingByMeal = new Map(editingDish.items.map(r => [r.mealType, r]));
+        for (const mealType of meals) {
+          const rec = existingByMeal.get(mealType);
+          if (rec) {
+            await gqlRequest(UPDATE_MENU_ITEM, {
+              id: rec._id,
+              input: { name: v.name, mealType, unit: v.unit, pricePerUnit: v.price },
+            });
+          } else {
+            await gqlRequest(CREATE_MENU_ITEM, {
+              input: { name: v.name, mealType, unit: v.unit, pricePerUnit: v.price },
+            });
+          }
+        }
         for (const rec of editingDish.items) {
-          await gqlRequest(UPDATE_MENU_ITEM, {
-            id: rec._id,
-            input: { name: v.name, mealType: rec.mealType, unit: v.unit, pricePerUnit: v.price },
-          });
+          if (!meals.includes(rec.mealType)) {
+            await gqlRequest(DELETE_MENU_ITEM, { id: rec._id });
+          }
         }
         toast.show('Dish updated.', 'success');
       } else {
@@ -121,8 +155,8 @@ export function VendorMenuScreen() {
           setSaving(false);
           return;
         }
-        // A dish is available for every meal.
-        for (const mealType of MEAL_TYPES) {
+        // Create a record for each selected meal type.
+        for (const mealType of meals) {
           await gqlRequest(CREATE_MENU_ITEM, {
             input: { name: v.name, mealType, unit: v.unit, pricePerUnit: v.price },
           });
@@ -195,19 +229,30 @@ export function VendorMenuScreen() {
               <View style={styles.flex1}>
                 <Text style={styles.name}>{dish.name}</Text>
                 <View style={styles.metaLine}>
-                  <Badge label="All meals" tone="primary" />
+                  {dish.meals.length === MEAL_TYPES.length ? (
+                    <Badge label="All meals" tone="primary" />
+                  ) : (
+                    sortMeals(dish.meals).map(m => (
+                      <Badge key={m} label={mealLabel(m)} tone="neutral" />
+                    ))
+                  )}
                   <Text style={styles.meta}>
                     per {dish.unit}
                     {dish.pricePerUnit != null ? ` · ₹${dish.pricePerUnit}` : ''}
                   </Text>
                 </View>
               </View>
-              <Pressable onPress={() => openEditDish(dish)} hitSlop={6} style={styles.iconBtn}>
-                <Text style={styles.editText}>Edit</Text>
+              <Pressable
+                onPress={() => openEditDish(dish)}
+                hitSlop={6}
+                accessibilityLabel={`Edit ${dish.name}`}
+                style={styles.iconBtn}>
+                <Text style={styles.editIcon}>✎</Text>
               </Pressable>
               <Pressable
                 onPress={() => removeDish(dish)}
                 hitSlop={6}
+                accessibilityLabel={`Remove ${dish.name}`}
                 style={[styles.iconBtn, styles.deleteBtn]}>
                 <Text style={styles.deleteText}>✕</Text>
               </Pressable>
@@ -223,6 +268,23 @@ export function VendorMenuScreen() {
         title={editingDish ? `Edit “${editingDish.name}”` : 'Add a dish'}
         maxHeightPct={80}>
         <Input label="Name" value={name} onChangeText={setName} placeholder="e.g. Grilled Chicken" />
+        <Text style={styles.fieldLabel}>Available for</Text>
+        <View style={styles.unitRow}>
+          {MEAL_TYPES.map(m => {
+            const active = meals.includes(m);
+            return (
+              <Pressable
+                key={m}
+                onPress={() => toggleMeal(m)}
+                style={[styles.unitChip, active && styles.unitChipActive]}>
+                <Text style={[styles.unitChipText, active && styles.unitChipTextActive]}>
+                  {active ? '✓ ' : ''}{mealLabel(m)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={styles.sheetGap} />
         <Input
           label="Unit"
           value={unit}
@@ -251,7 +313,7 @@ export function VendorMenuScreen() {
         </View>
         <View style={styles.sheetGap} />
         <Input
-          label="Price per unit (optional)"
+          label="Price per unit"
           value={price}
           onChangeText={setPrice}
           placeholder="e.g. 120"
@@ -290,15 +352,18 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   iconBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
+    width: 34,
+    height: 34,
     borderRadius: radius.sm,
     backgroundColor: colors.bgElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  editText: { color: colors.primary, fontSize: font.small, fontWeight: '700' },
+  editIcon: { color: colors.primary, fontSize: 16, fontWeight: '700' },
   deleteBtn: { backgroundColor: colors.dangerSoft },
-  deleteText: { color: colors.danger, fontSize: font.small, fontWeight: '700' },
+  deleteText: { color: colors.danger, fontSize: 15, fontWeight: '700' },
   sheetGap: { height: spacing.lg },
+  fieldLabel: { color: colors.textMuted, fontSize: font.small, fontWeight: '600', marginBottom: 6 },
   unitRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
   unitChip: {
     paddingHorizontal: spacing.md,

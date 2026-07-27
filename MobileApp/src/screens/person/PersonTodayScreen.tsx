@@ -5,7 +5,7 @@ import { Screen } from '../../ui/Screen';
 import { Button, Card, EmptyState, Loader } from '../../ui';
 import { Sheet } from '../../ui/Sheet';
 import { SignOutButton } from '../../ui/SignOutButton';
-import { useMenuItems, useMySelectionsForWeek, useMyMealDoneForWeek, useMealDoneStatus, useConfirmedOrders, useMealCancellationsForRange } from '../../api/hooks';
+import { useMenuItems, useMySelectionsForWeek, useMyMealDoneForWeek, useMealDoneStatus, useAggregatedOrder, useMealCancellationsForRange } from '../../api/hooks';
 import { gqlRequest } from '../../api/client';
 import { MARK_MEAL_DONE } from '../../api/operations';
 import { useSession } from '../../context/SessionContext';
@@ -24,7 +24,6 @@ export function PersonTodayScreen() {
   const menu = useMenuItems();
   const sel = useMySelectionsForWeek(start);
   const doneQuery = useMyMealDoneForWeek(start);
-  const confirmed = useConfirmedOrders(today);
   const cancel = useMealCancellationsForRange(today, today);
   const isMealCancelled = (meal: MealType) => cancel.cancellations.some(c => c.date === today && c.mealType === meal);
   const doneStatus = {
@@ -32,27 +31,35 @@ export function PersonTodayScreen() {
     lunch: useMealDoneStatus(today, 'lunch'),
     dinner: useMealDoneStatus(today, 'dinner'),
   };
+  // Attendance uses the LIVE aggregated selections (same source as each user's
+  // own "today" list) so the dishes shown here match the today page. Confirmed
+  // orders are a snapshot from "Send to Shefs" and can lag current selections.
+  const agg = {
+    breakfast: useAggregatedOrder(today, 'breakfast'),
+    lunch: useAggregatedOrder(today, 'lunch'),
+    dinner: useAggregatedOrder(today, 'dinner'),
+  };
   const [localDone, setLocalDone] = useState<Set<string>>(new Set());
   const [attendanceMeal, setAttendanceMeal] = useState<MealType | null>(null);
 
-  /** Everyone who ordered a given meal today (from the confirmed order breakdown). */
+  /** Everyone who ordered a given meal today (from the live aggregated selections). */
   const rosterFor = (meal: MealType): Array<{ userId: string; userName: string }> => {
     const map = new Map<string, string>();
-    confirmed.orders
-      .filter(o => o.mealType === meal)
-      .forEach(o => o.items.forEach(it => it.personBreakdown.forEach(p => map.set(p.userId, p.userName))));
+    agg[meal].aggregated.items.forEach(it =>
+      it.personBreakdown.forEach(p => map.set(p.userId, p.userName)),
+    );
     doneStatus[meal].doneUsers.forEach(u => map.set(u.userId, u.userName));
     return Array.from(map, ([userId, userName]) => ({ userId, userName }));
   };
 
   const dishesByUserFor = (meal: MealType): Map<string, Array<{ name: string; quantity: number }>> => {
     const map = new Map<string, Array<{ name: string; quantity: number }>>();
-    confirmed.orders
-      .filter(o => o.mealType === meal)
-      .forEach(o => o.items.forEach(it => it.personBreakdown.forEach(p => {
+    agg[meal].aggregated.items.forEach(it =>
+      it.personBreakdown.forEach(p => {
         if (!map.has(p.userId)) map.set(p.userId, []);
         map.get(p.userId)!.push({ name: it.name, quantity: p.quantity });
-      })));
+      }),
+    );
     return map;
   };
 
@@ -105,9 +112,11 @@ export function PersonTodayScreen() {
     menu.refetch();
     sel.refetch();
     doneQuery.refetch();
-    confirmed.refetch();
     cancel.refetch();
-    MEAL_TYPES.forEach(m => doneStatus[m].refetch());
+    MEAL_TYPES.forEach(m => {
+      doneStatus[m].refetch();
+      agg[m].refetch();
+    });
   };
 
   const itemMap = useMemo(() => {

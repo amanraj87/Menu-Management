@@ -13,6 +13,7 @@ import { PersonTodayView } from '@/app/(person)/PersonTodayView'
 import { PersonFeedback } from '@/app/(person)/PersonFeedback'
 import { ViewMenu } from '@/app/shared/ViewMenu'
 import { AdminPriceHistory } from '@/app/(admin)/AdminPriceHistory'
+import { AdminMenuManager } from '@/app/(admin)/AdminMenuManager'
 import { VendorMenuManager } from '@/app/(vendor)/VendorMenuManager'
 import { VendorWeekView } from '@/app/(vendor)/VendorWeekView'
 import { VendorFeedback } from '@/app/(vendor)/VendorFeedback'
@@ -46,7 +47,7 @@ export const router = createBrowserRouter([
           { path: 'week', element: <AdminWeekView /> },
           { path: 'users', element: <AdminUsers /> },
           { path: 'feedback', element: <AdminFeedback /> },
-          { path: 'menu', element: <ViewMenu /> },
+          { path: 'menu', element: <AdminMenuManager /> },
           { path: 'price-history', element: <AdminPriceHistory /> },
         ],
       },

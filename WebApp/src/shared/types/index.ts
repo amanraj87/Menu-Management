@@ -15,6 +15,8 @@ export interface MenuItem {
   mealType: MealType
   unit: string
   pricePerUnit?: number
+  /** Admin-controlled: whether users may choose this dish. Defaults to true. */
+  offered: boolean
   createdAt?: string
   updatedAt?: string
 }

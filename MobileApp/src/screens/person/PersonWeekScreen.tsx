@@ -264,7 +264,8 @@ export function PersonWeekScreen() {
     );
     const q = search.trim().toLowerCase();
     return menu.items
-      .filter(i => i.mealType === sheetMeal && !chosen.has(i._id))
+      // Users can only add dishes the admin has made available (offered).
+      .filter(i => i.mealType === sheetMeal && i.offered && !chosen.has(i._id))
       .filter(i => !q || i.name.toLowerCase().includes(q));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheetMeal, menu.items, search, quantities, activeDay]);

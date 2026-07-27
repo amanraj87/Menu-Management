@@ -7,7 +7,7 @@ const adminNav = [
   { to: '/admin/week', label: 'Week' },
   { to: '/admin/users', label: 'Users & vendors' },
   { to: '/admin/feedback', label: 'Feedback & suggestions' },
-  { to: '/admin/menu', label: 'View menu' },
+  { to: '/admin/menu', label: 'Menu' },
   { to: '/admin/price-history', label: 'Price history' },
 ]
 

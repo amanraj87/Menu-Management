@@ -10,6 +10,7 @@ import {
   CREATE_MENU_ITEM,
   UPDATE_MENU_ITEM,
   DELETE_MENU_ITEM,
+  SET_MENU_ITEM_OFFERED,
   MY_SELECTION,
   MY_SELECTIONS_FOR_WEEK,
   PUT_SELECTION,
@@ -118,13 +119,22 @@ export function useCreateUser(onSuccess?: () => void, onError?: (e: Error) => vo
   }
 }
 
-interface MenuItemsData { menuItems: Array<{ id: string; name: string; mealType: string; unit: string; pricePerUnit?: number | null; createdAt?: string | null; updatedAt?: string | null }> }
+interface MenuItemsData { menuItems: Array<{ id: string; name: string; mealType: string; unit: string; pricePerUnit?: number | null; offered?: boolean | null; createdAt?: string | null; updatedAt?: string | null }> }
 export function useMenuItems(mealType?: MealType) {
   const { data, loading, error } = useQuery<MenuItemsData>(MENU_ITEMS, {
     variables: mealType ? { mealType } : {},
   })
   const items = (data?.menuItems ?? []).map(toMenuItem)
   return { items, isLoading: loading, error }
+}
+
+export function useSetMenuItemOffered() {
+  const [mutate, result] = useMutation(SET_MENU_ITEM_OFFERED)
+  return {
+    setOffered: (id: string, offered: boolean) => mutate({ variables: { id, offered } }),
+    isPending: result.loading,
+    error: result.error,
+  }
 }
 
 export function useCreateMenuItem(onSuccess?: () => void, onError?: (e: Error) => void) {
