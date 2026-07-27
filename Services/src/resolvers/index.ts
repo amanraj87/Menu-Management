@@ -50,6 +50,7 @@ export const resolvers = {
     toggleMealOptOut: mealOptOuts.toggleMealOptOut,
     markMealDone: mealDone.markMealDone,
     remindNotEaten: mealDone.remindNotEaten,
+    remindNotEatenForDay: mealDone.remindNotEatenForDay,
     confirmOrder: orders.confirmOrder,
     confirmOrderWithItems: orders.confirmOrderWithItems,
     createFeedback: feedback.createFeedback,

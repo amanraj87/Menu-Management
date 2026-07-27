@@ -254,6 +254,8 @@ export const typeDefs = `#graphql
     markMealDone(date: String!, mealType: MealType!, done: Boolean!): Boolean!
     """Admin: notify everyone who ordered this meal but hasn't marked it eaten. Returns count notified."""
     remindNotEaten(date: String!, mealType: MealType!): Int!
+    """Admin: notify everyone who ordered ANY meal that day but hasn't marked it eaten (deduped). Returns count notified."""
+    remindNotEatenForDay(date: String!): Int!
     createFeedback(input: CreateFeedbackInput!): Feedback!
     confirmFeedback(id: ID!): Feedback!
     rejectFeedback(id: ID!): Feedback!
