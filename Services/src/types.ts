@@ -8,6 +8,8 @@ export interface MenuItemDoc {
   mealType: MealType
   unit: string
   pricePerUnit?: number
+  /** Admin-controlled: whether users may choose this dish. Missing = offered (default true). */
+  offered?: boolean
   createdAt?: Date
   updatedAt?: Date
 }

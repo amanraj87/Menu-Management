@@ -11,6 +11,8 @@ export const typeDefs = `#graphql
     mealType: MealType!
     unit: String!
     pricePerUnit: Float
+    """Admin-controlled: whether users may choose this dish for its meal."""
+    offered: Boolean!
     createdAt: String
     updatedAt: String
   }
@@ -238,6 +240,8 @@ export const typeDefs = `#graphql
     createMenuItem(input: CreateMenuItemInput!): MenuItem!
     updateMenuItem(id: ID!, input: UpdateMenuItemInput!): MenuItem!
     deleteMenuItem(id: ID!): Boolean!
+    """Admin: set whether users may choose a dish for its meal."""
+    setMenuItemOffered(id: ID!, offered: Boolean!): MenuItem!
     putSelection(input: PutSelectionInput!): Selection!
     """Admin: overwrite a specific user's selection for a date+meal (bypasses the monthly cap)."""
     adminSetUserSelection(userId: ID!, date: String!, mealType: MealType!, items: [SelectionItemInput!]!): Selection!

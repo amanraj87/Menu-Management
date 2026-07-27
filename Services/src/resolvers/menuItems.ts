@@ -55,6 +55,7 @@ function toMenuItem(doc: MenuItemDoc | null): Record<string, unknown> | null {
     mealType: doc.mealType,
     unit: doc.unit,
     pricePerUnit: doc.pricePerUnit ?? null,
+    offered: doc.offered !== false,
     createdAt: doc.createdAt?.toISOString() ?? null,
     updatedAt: doc.updatedAt?.toISOString() ?? null,
   }
@@ -202,6 +203,24 @@ export async function priceHistory(
     newPrice: d.newPrice,
     changedAt: d.changedAt.toISOString(),
   }))
+}
+
+export async function setMenuItemOffered(
+  _: unknown,
+  args: { id: string; offered: boolean },
+  context: { user?: ContextUser }
+): Promise<Record<string, unknown> | null> {
+  if (!context.user || context.user.role !== 'admin') {
+    throw new Error('Only admin can change what users may choose')
+  }
+  const db = getDb()
+  if (!ObjectId.isValid(args.id)) return null
+  const result = await db.collection(COLLECTIONS.menu_items).findOneAndUpdate(
+    { _id: new ObjectId(args.id) },
+    { $set: { offered: args.offered, updatedAt: new Date() } },
+    { returnDocument: 'after' }
+  )
+  return toMenuItem(result as MenuItemDoc | null)
 }
 
 export async function deleteMenuItem(_: unknown, args: { id: string }, context: { user?: ContextUser }): Promise<boolean> {
