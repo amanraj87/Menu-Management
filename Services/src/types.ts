@@ -8,8 +8,11 @@ export interface MenuItemDoc {
   mealType: MealType
   unit: string
   pricePerUnit?: number
-  /** Admin-controlled: whether users may choose this dish. Missing = offered (default true). */
-  offered?: boolean
+  /**
+   * Admin-controlled: weekdays (0=Sun … 6=Sat) users may choose this dish on.
+   * Missing = available every day (default). Empty array = never offered.
+   */
+  offeredDays?: number[]
   createdAt?: Date
   updatedAt?: Date
 }

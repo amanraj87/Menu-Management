@@ -44,7 +44,7 @@ export const resolvers = {
     createMenuItem: menuItems.createMenuItem,
     updateMenuItem: menuItems.updateMenuItem,
     deleteMenuItem: menuItems.deleteMenuItem,
-    setMenuItemOffered: menuItems.setMenuItemOffered,
+    setMenuItemOfferedDays: menuItems.setMenuItemOfferedDays,
     putSelection: selections.putSelection,
     adminSetUserSelection: selections.adminSetUserSelection,
     toggleMealOptOut: mealOptOuts.toggleMealOptOut,

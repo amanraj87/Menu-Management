@@ -47,6 +47,9 @@ async function recordPriceChange(
   return true
 }
 
+/** Every weekday (0=Sun … 6=Sat) — the default when an item has no restriction. */
+const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6]
+
 function toMenuItem(doc: MenuItemDoc | null): Record<string, unknown> | null {
   if (!doc) return null
   return {
@@ -55,7 +58,7 @@ function toMenuItem(doc: MenuItemDoc | null): Record<string, unknown> | null {
     mealType: doc.mealType,
     unit: doc.unit,
     pricePerUnit: doc.pricePerUnit ?? null,
-    offered: doc.offered !== false,
+    offeredDays: doc.offeredDays ?? ALL_DAYS,
     createdAt: doc.createdAt?.toISOString() ?? null,
     updatedAt: doc.updatedAt?.toISOString() ?? null,
   }
@@ -205,9 +208,9 @@ export async function priceHistory(
   }))
 }
 
-export async function setMenuItemOffered(
+export async function setMenuItemOfferedDays(
   _: unknown,
-  args: { id: string; offered: boolean },
+  args: { id: string; days: number[] },
   context: { user?: ContextUser }
 ): Promise<Record<string, unknown> | null> {
   if (!context.user || context.user.role !== 'admin') {
@@ -215,9 +218,11 @@ export async function setMenuItemOffered(
   }
   const db = getDb()
   if (!ObjectId.isValid(args.id)) return null
+  // Keep only valid weekdays (0–6), de-duplicated and sorted.
+  const days = Array.from(new Set((args.days ?? []).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))).sort((a, b) => a - b)
   const result = await db.collection(COLLECTIONS.menu_items).findOneAndUpdate(
     { _id: new ObjectId(args.id) },
-    { $set: { offered: args.offered, updatedAt: new Date() } },
+    { $set: { offeredDays: days, updatedAt: new Date() } },
     { returnDocument: 'after' }
   )
   return toMenuItem(result as MenuItemDoc | null)
