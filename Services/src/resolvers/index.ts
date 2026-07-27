@@ -49,6 +49,7 @@ export const resolvers = {
     adminSetUserSelection: selections.adminSetUserSelection,
     toggleMealOptOut: mealOptOuts.toggleMealOptOut,
     markMealDone: mealDone.markMealDone,
+    remindNotEaten: mealDone.remindNotEaten,
     confirmOrder: orders.confirmOrder,
     confirmOrderWithItems: orders.confirmOrderWithItems,
     createFeedback: feedback.createFeedback,

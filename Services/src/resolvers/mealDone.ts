@@ -1,6 +1,8 @@
 import { ObjectId } from 'mongodb'
 import { getDb } from '../db.js'
 import { COLLECTIONS } from '../constants/collections.js'
+import { aggregatedOrder } from './orders.js'
+import { sendToUsers } from '../services/fcm.js'
 import type { ContextUser, MealType, MealDoneDoc, UserDoc } from '../types.js'
 
 export async function myMealDoneForWeek(
@@ -59,6 +61,46 @@ export async function mealDoneStatus(
     mealType: doc.mealType,
     markedAt: doc.markedAt.toISOString(),
   }))
+}
+
+/**
+ * Admin: nudge everyone who ordered a given meal but hasn't marked it eaten yet,
+ * asking them to update their eaten status. Returns how many users were notified.
+ * Roster = live aggregated selections (opt-outs / deleted users already excluded).
+ */
+export async function remindNotEaten(
+  _: unknown,
+  args: { date: string; mealType: MealType },
+  context: { user?: ContextUser }
+): Promise<number> {
+  const user = context.user
+  if (!user || user.role !== 'admin') throw new Error('Unauthorized: admin role required')
+  const db = getDb()
+
+  const agg = (await aggregatedOrder(_, { date: args.date, mealType: args.mealType })) as {
+    items: { personBreakdown: { userId: string }[] }[]
+  }
+  const roster = new Set<string>()
+  for (const it of agg.items) for (const p of it.personBreakdown) roster.add(p.userId)
+  if (roster.size === 0) return 0
+
+  const done = (await db
+    .collection(COLLECTIONS.meal_done)
+    .find({ date: args.date, mealType: args.mealType })
+    .toArray()) as MealDoneDoc[]
+  const doneSet = new Set(done.map((d) => d.userId.toString()))
+
+  const targets = [...roster].filter((id) => !doneSet.has(id))
+  if (targets.length === 0) return 0
+
+  const label = args.mealType.charAt(0).toUpperCase() + args.mealType.slice(1)
+  await sendToUsers(
+    targets,
+    `Did you eat ${label.toLowerCase()}?`,
+    `Tap to update whether you ate ${label.toLowerCase()} on ${args.date}.`,
+    { type: 'mealDone', date: args.date, mealType: args.mealType },
+  )
+  return targets.length
 }
 
 export async function markMealDone(

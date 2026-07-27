@@ -252,6 +252,8 @@ export const typeDefs = `#graphql
     toggleMealOptOut(date: String!, mealType: MealType!, optedOut: Boolean!): Boolean!
     """Mark a meal as done (eaten) or undo it."""
     markMealDone(date: String!, mealType: MealType!, done: Boolean!): Boolean!
+    """Admin: notify everyone who ordered this meal but hasn't marked it eaten. Returns count notified."""
+    remindNotEaten(date: String!, mealType: MealType!): Int!
     createFeedback(input: CreateFeedbackInput!): Feedback!
     confirmFeedback(id: ID!): Feedback!
     rejectFeedback(id: ID!): Feedback!
