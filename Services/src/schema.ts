@@ -248,6 +248,8 @@ export const typeDefs = `#graphql
     confirmOrder(date: String!, mealType: MealType!): ConfirmedOrder!
     """Admin: confirm and send to vendor with optional edited items/quantities."""
     confirmOrderWithItems(date: String!, mealType: MealType!, items: [ConfirmedOrderItemInput!]!): ConfirmedOrder!
+    """Admin: notify vendors once that the week's orders have been sent (call after a Send-to-Shefs run)."""
+    notifyOrdersSentToVendor(startDate: String!, endDate: String!): Int!
     """Toggle a meal opt-out. optedOut=true inserts, false removes."""
     toggleMealOptOut(date: String!, mealType: MealType!, optedOut: Boolean!): Boolean!
     """Mark a meal as done (eaten) or undo it."""

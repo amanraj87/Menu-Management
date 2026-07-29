@@ -21,6 +21,8 @@ const TYPE_TO_TAB: Record<string, string> = {
   menuPrice: 'Menu', // A2 — vendor changed a meal price
   mealOptOut: 'Week', // admin — a person skipped an upcoming meal
   mealDone: 'Today', // person — reminder to update eaten status
+  mealCancelled: 'Week', // vendor + user — a meal was cancelled/restored
+  ordersSent: 'Week', // vendor — admin sent the week's orders
 };
 
 // Held when a tap arrives before the navigator is ready (cold start).

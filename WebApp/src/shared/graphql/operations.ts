@@ -270,6 +270,12 @@ export const REMIND_NOT_EATEN = gql`
   }
 `
 
+export const NOTIFY_ORDERS_SENT_TO_VENDOR = gql`
+  mutation NotifyOrdersSentToVendor($startDate: String!, $endDate: String!) {
+    notifyOrdersSentToVendor(startDate: $startDate, endDate: $endDate)
+  }
+`
+
 export const CREATE_FEEDBACK = gql`
   mutation CreateFeedback($input: CreateFeedbackInput!) {
     createFeedback(input: $input) {

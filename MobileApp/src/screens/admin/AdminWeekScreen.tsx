@@ -14,6 +14,7 @@ import {
   UPDATE_ADMIN_DAY_COMMENT,
   UPDATE_SETTINGS,
   REMIND_NOT_EATEN,
+  NOTIFY_ORDERS_SENT_TO_VENDOR,
 } from '../../api/operations';
 import { useMenuItems, useUsers, useSettings, useMealCancellationsForRange, useVendorDayNotesForRange } from '../../api/hooks';
 import { colors, font, mealMeta, radius, spacing } from '../../theme';
@@ -299,6 +300,13 @@ export function AdminWeekScreen() {
         }
         done++;
         setWeekProgress(`Processing ${done}/${combos.length}…`);
+      }
+      // One push to the vendor for the whole batch (not one per meal).
+      if (confirmed > 0 && days.length > 0) {
+        await gqlRequest(NOTIFY_ORDERS_SENT_TO_VENDOR, {
+          startDate: days[0],
+          endDate: days[days.length - 1],
+        }).catch(() => {});
       }
       toast.show(
         confirmed > 0

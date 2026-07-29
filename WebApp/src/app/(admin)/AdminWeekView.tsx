@@ -11,7 +11,7 @@ import {
   useVendorDayNotesForRange,
   useUpdateAdminDayComment,
 } from '@/shared/graphql/hooks'
-import { CONFIRM_ORDER_WITH_ITEMS, AGGREGATED_ORDERS_FOR_RANGE, ADMIN_SET_USER_SELECTION, RUN_AUTO_IMPORT } from '@/shared/graphql/operations'
+import { CONFIRM_ORDER_WITH_ITEMS, AGGREGATED_ORDERS_FOR_RANGE, ADMIN_SET_USER_SELECTION, RUN_AUTO_IMPORT, NOTIFY_ORDERS_SENT_TO_VENDOR } from '@/shared/graphql/operations'
 import { Card, Button, Loader } from '@/shared/ui'
 import { useToastStore } from '@/shared/stores/toastStore'
 import type { MealType } from '@/shared/types'
@@ -341,6 +341,13 @@ export function AdminWeekView() {
         }
         done++
         setWeekProgress(`Processing ${done}/${combos.length}…`)
+      }
+      // One push to the vendor for the whole batch (not one per meal).
+      if (confirmed > 0 && dates.length > 0) {
+        await client.mutate({
+          mutation: NOTIFY_ORDERS_SENT_TO_VENDOR,
+          variables: { startDate: dates[0], endDate: dates[dates.length - 1] },
+        }).catch(() => {})
       }
       toast.add(
         confirmed > 0

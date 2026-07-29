@@ -68,6 +68,12 @@ export const REMIND_NOT_EATEN = `
   }
 `;
 
+export const NOTIFY_ORDERS_SENT_TO_VENDOR = `
+  mutation NotifyOrdersSentToVendor($startDate: String!, $endDate: String!) {
+    notifyOrdersSentToVendor(startDate: $startDate, endDate: $endDate)
+  }
+`;
+
 export const DELETE_MENU_ITEM = `
   mutation DeleteMenuItem($id: ID!) {
     deleteMenuItem(id: $id)

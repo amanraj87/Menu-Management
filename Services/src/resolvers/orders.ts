@@ -1,6 +1,7 @@
 import { ObjectId } from 'mongodb'
 import { getDb } from '../db.js'
 import { COLLECTIONS } from '../constants/collections.js'
+import { sendToUsers, userIdsByRole } from '../services/fcm.js'
 import type { ContextUser } from '../types.js'
 import type { MealType } from '../types.js'
 import type {
@@ -336,6 +337,30 @@ export async function confirmedOrders(
     .find({ date: args.date })
     .toArray() as ConfirmedOrderDoc[]
   return orders.map(toConfirmedOrder)
+}
+
+/**
+ * Admin: send a single "orders are ready" push to all vendors after a
+ * Send-to-Shefs run. Called once by the client after it finishes confirming the
+ * week's meals, so the vendor gets one notification instead of one per meal.
+ */
+export async function notifyOrdersSentToVendor(
+  _: unknown,
+  args: { startDate: string; endDate: string },
+  context: { user?: ContextUser }
+): Promise<number> {
+  const user = context.user
+  if (!user || user.role !== 'admin') throw new Error('Unauthorized: admin role required')
+  const vendors = await userIdsByRole('vendor')
+  if (vendors.length === 0) return 0
+  const range = args.startDate === args.endDate ? args.startDate : `${args.startDate} – ${args.endDate}`
+  await sendToUsers(
+    vendors,
+    'New orders to prepare',
+    `Orders for ${range} were sent. Open the week to view them.`,
+    { type: 'ordersSent' },
+  )
+  return vendors.length
 }
 
 export async function confirmedOrdersForRange(
