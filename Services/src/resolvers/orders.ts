@@ -356,8 +356,8 @@ export async function notifyOrdersSentToVendor(
   const range = args.startDate === args.endDate ? args.startDate : `${args.startDate} – ${args.endDate}`
   await sendToUsers(
     vendors,
-    'New orders to prepare',
-    `Orders for ${range} were sent. Open the week to view them.`,
+    'Orders updated',
+    `Orders for ${range} have been updated. Open the week to view them.`,
     { type: 'ordersSent' },
   )
   return vendors.length

@@ -343,10 +343,16 @@ export function AdminWeekView() {
         setWeekProgress(`Processing ${done}/${combos.length}…`)
       }
       // One push to the vendor for the whole batch (not one per meal).
+      // On a weekday, reference just today's date; on the weekend, the week range.
       if (confirmed > 0 && dates.length > 0) {
+        const now = new Date()
+        const isWeekend = now.getDay() === 0 || now.getDay() === 6
+        const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
         await client.mutate({
           mutation: NOTIFY_ORDERS_SENT_TO_VENDOR,
-          variables: { startDate: dates[0], endDate: dates[dates.length - 1] },
+          variables: isWeekend
+            ? { startDate: dates[0], endDate: dates[dates.length - 1] }
+            : { startDate: localToday, endDate: localToday },
         }).catch(() => {})
       }
       toast.add(
