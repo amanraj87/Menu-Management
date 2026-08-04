@@ -18,6 +18,7 @@ import {
   MEAL_CANCELLATIONS_FOR_RANGE,
   VENDOR_DAY_NOTES_FOR_RANGE,
   PRICE_HISTORY,
+  VENDOR_DUES,
 } from './operations';
 import type {
   AggregatedOrder,
@@ -342,6 +343,37 @@ export interface PriceHistoryEntry {
   oldPrice: number | null;
   newPrice: number | null;
   changedAt: string;
+}
+
+export interface VendorDueDay {
+  date: string;
+  mealsSubtotal: number;
+  delivery: number;
+  activeMeals: number;
+  computedTotal: number;
+  vendorFinalAmount: number | null;
+  owed: number;
+  hasOverride: boolean;
+  sentToVendor: boolean;
+}
+export interface VendorDuesData {
+  startDate: string;
+  endDate: string;
+  days: VendorDueDay[];
+  mealsSubtotal: number;
+  delivery: number;
+  totalOwed: number;
+  overrideCount: number;
+  overrideDelta: number;
+  notSentCount: number;
+}
+export function useVendorDues(startDate: string, endDate: string) {
+  const q = useGqlQuery<{ vendorDues: VendorDuesData }>(
+    VENDOR_DUES,
+    { startDate, endDate },
+    { skip: !startDate || !endDate || endDate < startDate },
+  );
+  return { dues: q.data?.vendorDues ?? null, ...q };
 }
 
 export function usePriceHistory(menuItemId?: string) {

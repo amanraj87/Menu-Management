@@ -23,7 +23,7 @@ const adminNav = [
   { to: '/admin/users', label: 'Users & vendors' },
   { to: '/admin/feedback', label: 'Feedback & suggestions' },
   { to: '/admin/menu', label: 'Menu' },
-  { to: '/admin/price-history', label: 'Price history' },
+  { to: '/admin/price-history', label: 'Dues & prices' },
 ]
 
 export function AdminLayout() {

@@ -270,6 +270,32 @@ export const REMIND_NOT_EATEN = gql`
   }
 `
 
+export const VENDOR_DUES = gql`
+  query VendorDues($startDate: String!, $endDate: String!) {
+    vendorDues(startDate: $startDate, endDate: $endDate) {
+      startDate
+      endDate
+      days {
+        date
+        mealsSubtotal
+        delivery
+        activeMeals
+        computedTotal
+        vendorFinalAmount
+        owed
+        hasOverride
+        sentToVendor
+      }
+      mealsSubtotal
+      delivery
+      totalOwed
+      overrideCount
+      overrideDelta
+      notSentCount
+    }
+  }
+`
+
 export const NOTIFY_ORDERS_SENT_TO_VENDOR = gql`
   mutation NotifyOrdersSentToVendor($startDate: String!, $endDate: String!) {
     notifyOrdersSentToVendor(startDate: $startDate, endDate: $endDate)

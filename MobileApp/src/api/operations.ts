@@ -68,6 +68,20 @@ export const REMIND_NOT_EATEN = `
   }
 `;
 
+export const VENDOR_DUES = `
+  query VendorDues($startDate: String!, $endDate: String!) {
+    vendorDues(startDate: $startDate, endDate: $endDate) {
+      startDate endDate
+      days {
+        date mealsSubtotal delivery activeMeals computedTotal
+        vendorFinalAmount owed hasOverride sentToVendor
+      }
+      mealsSubtotal delivery totalOwed
+      overrideCount overrideDelta notSentCount
+    }
+  }
+`;
+
 export const NOTIFY_ORDERS_SENT_TO_VENDOR = `
   mutation NotifyOrdersSentToVendor($startDate: String!, $endDate: String!) {
     notifyOrdersSentToVendor(startDate: $startDate, endDate: $endDate)

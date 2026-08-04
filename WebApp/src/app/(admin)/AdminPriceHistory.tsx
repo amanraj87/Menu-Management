@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Card, Loader } from '@/shared/ui'
+import { Loader } from '@/shared/ui'
 import { usePriceHistory } from '@/shared/graphql/hooks'
 
 function formatDate(iso: string): string {
@@ -47,8 +47,8 @@ export function AdminPriceHistory() {
   if (isLoading) return <Loader />
 
   return (
-    <Card className="content-card" title="Price History">
-      <p className="content-subtitle">Track when vendors changed menu item prices.</p>
+    <>
+      <p className="content-subtitle" style={{ marginTop: 0 }}>Track when vendors changed menu item prices.</p>
 
       <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <select
@@ -149,6 +149,6 @@ export function AdminPriceHistory() {
           ))}
         </div>
       )}
-    </Card>
+    </>
   )
 }

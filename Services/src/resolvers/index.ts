@@ -9,6 +9,7 @@ import * as mealDone from './mealDone.js'
 import * as mealCancellations from './mealCancellations.js'
 import * as settings from './settings.js'
 import * as vendorDayNotes from './vendorDayNotes.js'
+import * as vendorDuesResolvers from './vendorDues.js'
 import * as pushTokens from './pushTokens.js'
 import { runAutoImport } from '../jobs/autoImport.js'
 
@@ -30,6 +31,7 @@ export const resolvers = {
     confirmedOrdersForRange: orders.confirmedOrdersForRange,
     getSettings: settings.getSettings,
     weeklyExpense: selections.weeklyExpense,
+    vendorDues: vendorDuesResolvers.vendorDues,
     mealCancellationsForRange: mealCancellations.mealCancellationsForRange,
     vendorDayNotesForRange: vendorDayNotes.vendorDayNotesForRange,
     priceHistory: menuItems.priceHistory,

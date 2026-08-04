@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Screen } from '../../ui/Screen';
-import { Card, EmptyState, Loader, SectionLabel } from '../../ui';
+import { Card, EmptyState, Loader, SectionLabel, Segmented } from '../../ui';
 import { SignOutButton } from '../../ui/SignOutButton';
 import { usePriceHistory } from '../../api/hooks';
-import { useMenuItems } from '../../api/hooks';
 import { colors, font, radius, spacing } from '../../theme';
 import { Sheet } from '../../ui/Sheet';
+import { AdminVendorDuesView } from './AdminVendorDuesView';
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -23,11 +23,14 @@ function formatPrice(v: number | null): string {
   return `₹${v}`;
 }
 
+type PriceTab = 'dues' | 'history';
+
 export function AdminPriceHistoryScreen() {
   const { history, loading, refetch } = usePriceHistory();
-  const menu = useMenuItems();
+  const [tab, setTab] = useState<PriceTab>('dues');
   const [filter, setFilter] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
+  const duesRefetch = React.useRef<(() => void) | null>(null);
 
   const menuItemNames = useMemo(() => {
     const names = new Set<string>();
@@ -53,11 +56,24 @@ export function AdminPriceHistoryScreen() {
 
   return (
     <Screen
-      title="Price History"
+      title={tab === 'dues' ? 'Vendor dues' : 'Price history'}
       headerRight={<SignOutButton />}
       refreshing={loading}
-      onRefresh={refetch}
+      onRefresh={() => (tab === 'dues' ? duesRefetch.current?.() : refetch())}
     >
+      <Segmented
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: 'dues', label: 'Vendor dues' },
+          { value: 'history', label: 'Price history' },
+        ]}
+      />
+
+      {tab === 'dues' ? (
+        <AdminVendorDuesView onRefetchReady={fn => { duesRefetch.current = fn; }} />
+      ) : (
+      <>
       <Pressable style={styles.filterBtn} onPress={() => setFilterOpen(true)}>
         <Text style={styles.filterBtnText}>
           {filter ?? 'All items'}
@@ -111,6 +127,8 @@ export function AdminPriceHistoryScreen() {
             </Card>
           </View>
         ))
+      )}
+      </>
       )}
 
       <Sheet

@@ -11,6 +11,7 @@ import {
   UPDATE_MENU_ITEM,
   DELETE_MENU_ITEM,
   SET_MENU_ITEM_OFFERED_DAYS,
+  VENDOR_DUES,
   MY_SELECTION,
   MY_SELECTIONS_FOR_WEEK,
   PUT_SELECTION,
@@ -126,6 +127,36 @@ export function useMenuItems(mealType?: MealType) {
   })
   const items = (data?.menuItems ?? []).map(toMenuItem)
   return { items, isLoading: loading, error }
+}
+
+export interface VendorDueDay {
+  date: string
+  mealsSubtotal: number
+  delivery: number
+  activeMeals: number
+  computedTotal: number
+  vendorFinalAmount: number | null
+  owed: number
+  hasOverride: boolean
+  sentToVendor: boolean
+}
+export interface VendorDuesData {
+  startDate: string
+  endDate: string
+  days: VendorDueDay[]
+  mealsSubtotal: number
+  delivery: number
+  totalOwed: number
+  overrideCount: number
+  overrideDelta: number
+  notSentCount: number
+}
+export function useVendorDues(startDate: string, endDate: string) {
+  const { data, loading, error } = useQuery<{ vendorDues: VendorDuesData }>(VENDOR_DUES, {
+    variables: { startDate, endDate },
+    skip: !startDate || !endDate || endDate < startDate,
+  })
+  return { dues: data?.vendorDues ?? null, isLoading: loading, error }
 }
 
 export function useSetMenuItemOfferedDays() {

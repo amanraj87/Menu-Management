@@ -107,6 +107,43 @@ export const typeDefs = `#graphql
     updatedAt: String
   }
 
+  """One day's contribution to what the vendor is owed."""
+  type VendorDueDay {
+    date: String!
+    """Sum of confirmed order items x current menu price, excluding cancelled meals."""
+    mealsSubtotal: Float!
+    """Delivery charge for this day (per-meal charge x active meals)."""
+    delivery: Float!
+    """Meals with an order that aren't cancelled — what delivery is charged on."""
+    activeMeals: Int!
+    """mealsSubtotal + delivery, before any vendor override."""
+    computedTotal: Float!
+    """The vendor's own final amount for this day, if they set one."""
+    vendorFinalAmount: Float
+    """What is actually owed: the vendor's final amount when set, else the computed total."""
+    owed: Float!
+    """True when the vendor's final amount differs from the computed total."""
+    hasOverride: Boolean!
+    """True when at least one confirmed order exists for this day."""
+    sentToVendor: Boolean!
+  }
+
+  """Admin view of money owed to the vendor for a date range."""
+  type VendorDues {
+    startDate: String!
+    endDate: String!
+    days: [VendorDueDay!]!
+    mealsSubtotal: Float!
+    delivery: Float!
+    totalOwed: Float!
+    """How many days the vendor's final amount overrode the computed total."""
+    overrideCount: Int!
+    """Net rupee effect of those overrides (owed - computed)."""
+    overrideDelta: Float!
+    """Days in range with no confirmed order and nothing owed."""
+    notSentCount: Int!
+  }
+
   type Feedback {
     id: ID!
     userId: ID!
@@ -211,6 +248,8 @@ export const typeDefs = `#graphql
     getSettings: Settings!
     """Admin: total price of ALL users' selections for 7 days starting at startDate."""
     weeklyExpense(startDate: String!): Float!
+    """Admin: amount owed to the vendor over a date range, based on confirmed orders + the vendor's per-day final amounts."""
+    vendorDues(startDate: String!, endDate: String!): VendorDues!
     """Vendor-cancelled meals within a date range (inclusive)."""
     mealCancellationsForRange(startDate: String!, endDate: String!): [MealCancellation!]!
     """Vendor day notes (final amount override + comment) for a date range."""
