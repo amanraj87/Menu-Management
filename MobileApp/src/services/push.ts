@@ -26,6 +26,7 @@ import notifee, { AndroidImportance, EventType } from '@notifee/react-native';
 import { gqlRequest } from '../api/client';
 import { REGISTER_PUSH_TOKEN, UNREGISTER_PUSH_TOKEN } from '../api/operations';
 import { routeFromNotificationData } from '../navigation/navigationRef';
+import { RESEND_ACTION_ID, runNotificationAction } from './notificationActions';
 
 export const REMOTE_CHANNEL_ID = 'remote-alerts';
 
@@ -53,6 +54,12 @@ export async function displayRemoteMessage(message: {
     message.notification?.title ?? message.data?.title ?? 'FoodOps';
   const body = message.notification?.body ?? message.data?.body ?? '';
   if (!title && !body) return;
+  // Data-only messages may ask for an action button (e.g. the meal-skipped
+  // alert offers "Send to vendor" so the admin needn't open the app).
+  const actions =
+    message.data?.action === RESEND_ACTION_ID
+      ? [{ title: 'Send to vendor', pressAction: { id: RESEND_ACTION_ID } }]
+      : undefined;
   await notifee.displayNotification({
     title,
     body,
@@ -61,6 +68,7 @@ export async function displayRemoteMessage(message: {
       channelId,
       pressAction: { id: 'default' },
       smallIcon: 'ic_launcher',
+      ...(actions ? { actions } : {}),
     },
   });
 }
@@ -119,9 +127,15 @@ export function initNotificationRouting(): void {
 
   // Foreground: a notifee notification (FCM foreground display or the local
   // P1 reminder) was tapped.
-  notifee.onForegroundEvent(({ type, detail }) => {
+  notifee.onForegroundEvent(async ({ type, detail }) => {
     if (type === EventType.PRESS) {
       routeFromNotificationData(detail.notification?.data as any);
+    } else if (type === EventType.ACTION_PRESS) {
+      await runNotificationAction(
+        detail.pressAction?.id,
+        detail.notification?.data,
+        detail.notification?.id,
+      );
     }
   });
 

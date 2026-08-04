@@ -340,6 +340,40 @@ export async function confirmedOrders(
 }
 
 /**
+ * Admin: re-send ONE meal to the vendor and notify them, in a single call.
+ *
+ * Exists so the "Send to vendor" button on the meal-skipped notification can act
+ * without opening the app: it re-confirms straight from the live aggregate
+ * (server-side, so no client data is needed) and then pushes the vendor.
+ * Returns the number of items sent.
+ */
+export async function resendMealToVendor(
+  _: unknown,
+  args: { date: string; mealType: MealType },
+  context: { user?: ContextUser }
+): Promise<number> {
+  const user = context.user
+  if (!user || user.role !== 'admin') throw new Error('Unauthorized: admin role required')
+
+  // confirmOrder recomputes from aggregatedOrder, which already excludes
+  // opt-outs — so this picks up the cancellation that triggered the alert.
+  const confirmed = (await confirmOrder(_, args, context)) as { items: unknown[] }
+  const itemCount = confirmed.items.length
+
+  const label = args.mealType.charAt(0).toUpperCase() + args.mealType.slice(1)
+  const vendors = await userIdsByRole('vendor')
+  if (vendors.length > 0) {
+    await sendToUsers(
+      vendors,
+      'Orders updated',
+      `${label} orders for ${args.date} have been updated. Open the week to view them.`,
+      { type: 'ordersSent' },
+    )
+  }
+  return itemCount
+}
+
+/**
  * Admin: send a single "orders are ready" push to all vendors after a
  * Send-to-Shefs run. Called once by the client after it finishes confirming the
  * week's meals, so the vendor gets one notification instead of one per meal.

@@ -58,12 +58,20 @@ export async function toggleMealOptOut(
       .findOne({ _id: new ObjectId(user.userId) })) as UserDoc | null
     const name = person?.name ?? 'Someone'
     const meal = args.mealType.charAt(0).toUpperCase() + args.mealType.slice(1)
+    // Sent data-only so the app can render a "Send to vendor" action button,
+    // letting the admin push the corrected order without opening the app.
     const admins = await userIdsByRole('admin')
     await sendToUsers(
       admins,
       'A meal was skipped',
       `${name} skipped ${meal} on ${args.date}`,
-      { type: 'mealOptOut', date: args.date, mealType: args.mealType },
+      {
+        type: 'mealOptOut',
+        date: args.date,
+        mealType: args.mealType,
+        action: 'resendOrder',
+      },
+      { dataOnly: true },
     )
   } else {
     await db.collection(COLLECTIONS.meal_opt_outs).deleteOne(filter)

@@ -82,6 +82,12 @@ export const VENDOR_DUES = `
   }
 `;
 
+export const RESEND_MEAL_TO_VENDOR = `
+  mutation ResendMealToVendor($date: String!, $mealType: MealType!) {
+    resendMealToVendor(date: $date, mealType: $mealType)
+  }
+`;
+
 export const NOTIFY_ORDERS_SENT_TO_VENDOR = `
   mutation NotifyOrdersSentToVendor($startDate: String!, $endDate: String!) {
     notifyOrdersSentToVendor(startDate: $startDate, endDate: $endDate)

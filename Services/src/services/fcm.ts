@@ -87,6 +87,17 @@ export async function sendToUsers(
   title: string,
   body: string,
   data?: Record<string, string>,
+  opts?: {
+    /**
+     * Send as a DATA-ONLY message (no `notification` block), so the app displays
+     * it itself via notifee. Required for notification action buttons: FCM's own
+     * notification payload can't carry them, and an OS-displayed tray
+     * notification has no buttons. Title/body are passed through `data`.
+     *
+     * Caveat: a data-only message won't surface if the app has been force-stopped.
+     */
+    dataOnly?: boolean
+  },
 ): Promise<void> {
   try {
     const ids = userIds.map(id => (typeof id === 'string' ? new ObjectId(id) : id))
@@ -109,8 +120,10 @@ export async function sendToUsers(
             body: JSON.stringify({
               message: {
                 token: deviceToken,
-                notification: { title, body },
-                data: data ?? {},
+                ...(opts?.dataOnly ? {} : { notification: { title, body } }),
+                data: opts?.dataOnly
+                  ? { ...(data ?? {}), title, body }
+                  : (data ?? {}),
                 android: { priority: 'high' },
               },
             }),

@@ -55,6 +55,7 @@ export const resolvers = {
     confirmOrder: orders.confirmOrder,
     confirmOrderWithItems: orders.confirmOrderWithItems,
     notifyOrdersSentToVendor: orders.notifyOrdersSentToVendor,
+    resendMealToVendor: orders.resendMealToVendor,
     createFeedback: feedback.createFeedback,
     confirmFeedback: feedback.confirmFeedback,
     rejectFeedback: feedback.rejectFeedback,
