@@ -912,3 +912,30 @@ select.input option,
   font-size: 0.85rem;
 }
 .dues-breakdown span { color: var(--color-text-muted); }
+
+/* ── Admin week: drift since "Send to Shefs" ─────────────────────────── */
+.drift-banner {
+  margin-top: 0.85rem;
+  padding: 0.55rem 0.8rem;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--color-warning);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.drift-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--color-warning);
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  padding: 0.08rem 0.45rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.drift-sent {
+  font-size: 0.7rem;
+  color: var(--color-warning);
+  margin-top: 0.1rem;
+}

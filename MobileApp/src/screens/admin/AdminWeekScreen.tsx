@@ -8,6 +8,7 @@ import { gqlRequest } from '../../api/client';
 import {
   ADMIN_SET_USER_SELECTION,
   AGGREGATED_ORDERS_FOR_RANGE,
+  CONFIRMED_ORDERS_FOR_RANGE,
   CONFIRM_ORDER_WITH_ITEMS,
   RUN_AUTO_IMPORT,
   TOGGLE_MEAL_CANCELLATION,
@@ -76,6 +77,8 @@ export function AdminWeekScreen() {
   const [wkStart, setWkStart] = useState(() => getWeekStart(todayISO()));
   // Live combined user selections keyed by `${date}|${meal}` → (menuItemId → info).
   const [aggByKey, setAggByKey] = useState<Record<string, Record<string, AggInfo>>>({});
+  // What was last SENT to the vendor: date → meal → subtotal.
+  const [sentByDate, setSentByDate] = useState<Record<string, Record<string, number>>>({});
   const [loading, setLoading] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -342,11 +345,31 @@ export function AdminWeekScreen() {
         agg[`${a.date}|${a.mealType}`] = items;
       });
       setAggByKey(agg);
+
+      // What the vendor was actually sent, so we can flag drift since the send.
+      const sentRes = await gqlRequest<{ confirmedOrdersForRange: any[] }>(
+        CONFIRMED_ORDERS_FOR_RANGE,
+        { startDate: wkStart, endDate: wkEnd },
+      );
+      const sent: Record<string, Record<string, number>> = {};
+      (sentRes.confirmedOrdersForRange ?? []).forEach((o: any) => {
+        const key = o.date as string;
+        if (!sent[key]) sent[key] = {};
+        let sum = 0;
+        (o.items ?? []).forEach((it: any) => {
+          sum += (priceMap.get(it.menuItemId) ?? 0) * it.quantity;
+        });
+        sent[key][o.mealType] = (sent[key][o.mealType] ?? 0) + sum;
+      });
+      setSentByDate(sent);
     } catch (e) {
       toast.show(`Failed to load week: ${(e as Error).message}`, 'error');
     } finally {
       setLoading(false);
     }
+    // priceMap is derived from the menu query; including it would refetch on
+    // every menu change, and stale prices self-correct on the next load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wkStart, wkEnd, toast]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -376,6 +399,22 @@ export function AdminWeekScreen() {
     return { meals, subtotals, cancelled, mealsTotal, activeMeals };
   };
 
+  /** Day total as last sent to the vendor, or null if nothing was sent that day. */
+  const sentDayTotal = (date: string): number | null => {
+    const subs = sentByDate[date];
+    if (!subs) return null;
+    let mealsTotal = 0;
+    let activeMeals = 0;
+    for (const meal of MEAL_TYPES) {
+      if (cancelledSet.has(`${date}|${meal}`)) continue;
+      const sub = subs[meal] ?? 0;
+      if (sub <= 0) continue;
+      mealsTotal += sub;
+      activeMeals++;
+    }
+    return mealsTotal + delivery * activeMeals;
+  };
+
   const today = todayISO();
   const weekTotal = days.reduce((sum, date) => {
     const { mealsTotal, activeMeals } = buildMeals(date);
@@ -390,6 +429,20 @@ export function AdminWeekScreen() {
     const finalAmt = vendorNotesByDate[date]?.finalAmount ?? null;
     return sum + ((finalAmt != null && Math.round(finalAmt) !== Math.round(computed)) ? finalAmt : computed);
   }, 0);
+
+  // Drift: days already sent whose live total no longer matches what the vendor has.
+  const driftDays = days
+    .map(date => {
+      const sent = sentDayTotal(date);
+      if (sent == null) return null;
+      const { mealsTotal, activeMeals } = buildMeals(date);
+      const live = mealsTotal + delivery * activeMeals;
+      if (Math.round(sent) === Math.round(live)) return null;
+      return { date, delta: live - sent };
+    })
+    .filter((x): x is { date: string; delta: number } => x !== null);
+  const sentWeekTotal = days.reduce((sum, date) => sum + (sentDayTotal(date) ?? 0), 0);
+  const driftTotal = driftDays.reduce((s, x) => s + x.delta, 0);
 
   const remindMeal = async (mealType: MealType) => {
     setRemindPending(true);
@@ -519,11 +572,24 @@ export function AdminWeekScreen() {
           <Text style={styles.weekLabel}>{formatShort(wkStart)} – {formatShort(wkEnd)}</Text>
           <Text style={styles.weekTotal}>₹{Math.round(expenseTillNow)} / ₹{Math.round(weekTotal)}</Text>
           <Text style={styles.expenseHint}>spent till now / week total</Text>
+          {sentWeekTotal > 0 && (
+            <Text style={styles.sentHint}>Sent to shefs: ₹{Math.round(sentWeekTotal)}</Text>
+          )}
         </View>
         <Pressable style={styles.navBtn} onPress={() => setWkStart(addDays(wkStart, 7))} hitSlop={8}>
           <Text style={styles.navBtnText}>›</Text>
         </Pressable>
       </View>
+
+      {driftDays.length > 0 && (
+        <View style={styles.driftBanner}>
+          <Text style={styles.driftBannerText}>
+            ⚠ {driftDays.length} day{driftDays.length === 1 ? '' : 's'} changed after you sent to shefs (
+            {driftTotal >= 0 ? '+' : '−'}₹{Math.abs(Math.round(driftTotal))}). The vendor still has the amount you
+            sent — re-send to bring them in sync.
+          </Text>
+        </View>
+      )}
 
       {/* Send to Shefs */}
       <Button
@@ -547,6 +613,8 @@ export function AdminWeekScreen() {
           const finalAmt = vendorNote?.finalAmount ?? undefined;
           // Only strike through when the vendor's final differs from the computed total.
           const showFinal = finalAmt != null && Math.round(finalAmt) !== Math.round(dayTotal);
+          const sentTotal = sentDayTotal(date);
+          const drifted = sentTotal != null && Math.round(sentTotal) !== Math.round(dayTotal);
 
           return (
             <Card key={date} padded={false}>
@@ -555,15 +623,19 @@ export function AdminWeekScreen() {
                   <Text style={[styles.chevron, collapsed && styles.chevronCollapsed]}>▾</Text>
                   <Text style={styles.dayTitle}>{dayName(date)} · {formatShort(date)}</Text>
                   {isToday(date) && <Text style={styles.todayBadge}>Today</Text>}
+                  {drifted && <Text style={styles.driftTag}>⚠ changed</Text>}
                 </View>
-                {showFinal ? (
-                  <View style={styles.amountWrap}>
-                    <Text style={styles.dayAmountStruck}>₹{Math.round(dayTotal)}</Text>
-                    <Text style={styles.dayAmount}>₹{finalAmt}</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.dayAmount}>₹{Math.round(dayTotal)}</Text>
-                )}
+                <View style={styles.amountCol}>
+                  {showFinal ? (
+                    <View style={styles.amountWrap}>
+                      <Text style={styles.dayAmountStruck}>₹{Math.round(dayTotal)}</Text>
+                      <Text style={styles.dayAmount}>₹{finalAmt}</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.dayAmount}>₹{Math.round(dayTotal)}</Text>
+                  )}
+                  {drifted && <Text style={styles.driftSent}>sent ₹{Math.round(sentTotal!)}</Text>}
+                </View>
               </Pressable>
 
               {collapsed ? (
@@ -762,6 +834,19 @@ export function AdminWeekScreen() {
 
 const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  sentHint: { color: colors.textFaint, fontSize: font.tiny, marginTop: 1 },
+  driftBanner: {
+    marginBottom: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.45)',
+    backgroundColor: 'rgba(245,158,11,0.12)',
+  },
+  driftBannerText: { color: colors.warning, fontSize: font.small, lineHeight: 19 },
+  driftTag: { color: colors.warning, fontSize: font.tiny, fontWeight: '700' },
+  driftSent: { color: colors.warning, fontSize: font.tiny, marginTop: 1, textAlign: 'right' },
+  amountCol: { alignItems: 'flex-end' },
   bellBtn: { padding: 2 },
   bellIcon: { fontSize: 20 },
   bellIconBusy: { opacity: 0.5 },

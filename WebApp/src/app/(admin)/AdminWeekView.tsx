@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useApolloClient } from '@apollo/client/react'
 import {
   useAggregatedOrdersForRange,
+  useConfirmedOrdersForRange,
   useMenuItems,
   useUsers,
   useSettings,
@@ -121,6 +122,8 @@ export function AdminWeekView() {
   const client = useApolloClient()
 
   const { aggregated, isLoading: aggLoading } = useAggregatedOrdersForRange(weekStart, weekEnd)
+  // What the vendor was actually sent, so we can flag drift since "Send to Shefs".
+  const { orders: confirmedOrders } = useConfirmedOrdersForRange(weekStart, weekEnd)
   const { items: menuItems, isLoading: menuLoading } = useMenuItems()
   const { users } = useUsers()
   const { settings, isLoading: settingsLoading } = useSettings()
@@ -273,6 +276,35 @@ export function AdminWeekView() {
 
   const delivery = settings.deliveryCharge ?? 0
 
+  // Per-meal subtotals of what was actually SENT to the vendor (confirmed_orders).
+  // Users can still opt out of an upcoming meal after a send, which moves the live
+  // aggregate but not this — so we compare the two and flag the difference.
+  const sentByDate = useMemo(() => {
+    const map = new Map<string, Record<Meal, number>>()
+    for (const o of confirmedOrders) {
+      let subs = map.get(o.date)
+      if (!subs) { subs = { breakfast: 0, lunch: 0, dinner: 0 }; map.set(o.date, subs) }
+      const meal = o.mealType as Meal
+      for (const it of o.items) subs[meal] += (priceByMenuId[it.menuItemId] ?? 0) * it.quantity
+    }
+    return map
+  }, [confirmedOrders, priceByMenuId])
+
+  /** Day total as last sent to the vendor, or null if nothing was sent for that day. */
+  const sentDayTotal = (date: string): number | null => {
+    const subs = sentByDate.get(date)
+    if (!subs) return null
+    let mealsTotal = 0
+    let activeMeals = 0
+    for (const { id: meal } of MEALS) {
+      if (cancelledSet.has(`${date}|${meal}`)) continue
+      if (subs[meal] <= 0) continue
+      mealsTotal += subs[meal]
+      activeMeals++
+    }
+    return mealsTotal + delivery * activeMeals
+  }
+
   const week: DayData[] = useMemo(() => {
     return dates.map((date) => {
       const meals = { breakfast: [] as Row[], lunch: [] as Row[], dinner: [] as Row[] }
@@ -387,6 +419,19 @@ export function AdminWeekView() {
   const weekTotal = week.reduce((sum, d) => sum + effectiveDayTotal(d), 0)
   const expenseTillNow = week.reduce((sum, d) => sum + (d.date <= todayStr ? effectiveDayTotal(d) : 0), 0)
 
+  // Drift: days already sent to the vendor whose live total no longer matches.
+  const driftDays = week
+    .map((d) => {
+      const sent = sentDayTotal(d.date)
+      if (sent == null) return null
+      const live = dayTotalOf(d)
+      if (Math.round(sent) === Math.round(live)) return null
+      return { date: d.date, sent, live, delta: live - sent }
+    })
+    .filter((x): x is { date: string; sent: number; live: number; delta: number } => x !== null)
+  const sentWeekTotal = week.reduce((sum, d) => sum + (sentDayTotal(d.date) ?? 0), 0)
+  const driftTotal = driftDays.reduce((s, x) => s + x.delta, 0)
+
   return (
     <>
       {/* Settings (collapsible) */}
@@ -471,6 +516,11 @@ export function AdminWeekView() {
                 {money(expenseTillNow)} <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-muted)' }}>/ {money(weekTotal)}</span>
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>spent till now / week total</div>
+              {sentWeekTotal > 0 && (
+                <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: '0.15rem' }}>
+                  Sent to shefs: <strong style={{ color: 'var(--color-text)' }}>{money(sentWeekTotal)}</strong>
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
               <Button onClick={handleConfirmWeek} disabled={weekPending} size="sm">
@@ -479,6 +529,15 @@ export function AdminWeekView() {
             </div>
           </div>
         </div>
+        {driftDays.length > 0 && (
+          <div className="drift-banner">
+            <span>
+              ⚠ {driftDays.length} day{driftDays.length === 1 ? '' : 's'} changed after you sent to shefs
+              {' '}({driftTotal >= 0 ? '+' : '−'}{money(Math.abs(driftTotal))}). The vendor still has the amount you sent —
+              re-send to bring them in sync.
+            </span>
+          </div>
+        )}
       </Card>
 
       {/* Day cards */}
@@ -492,6 +551,8 @@ export function AdminWeekView() {
           // Only strike through when the vendor's final differs from the computed total.
           const showFinal = finalAmt != null && Math.round(finalAmt) !== Math.round(dayTotal)
           const finalStr = finalAmt != null ? money(finalAmt) : ''
+          const sentTotal = sentDayTotal(d.date)
+          const drifted = sentTotal != null && Math.round(sentTotal) !== Math.round(dayTotal)
           return (
             <Card key={d.date} className="content-card" style={today ? { borderColor: 'var(--color-primary)' } : undefined}>
               <div
@@ -505,15 +566,28 @@ export function AdminWeekView() {
                   {today && (
                     <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-primary)', background: 'rgba(34,197,94,0.14)', padding: '0.1rem 0.5rem', borderRadius: 999 }}>Today</span>
                   )}
+                  {drifted && (
+                    <span
+                      className="drift-tag"
+                      title={`Sent to shefs: ${money(sentTotal!)} · now ${money(dayTotal)}`}
+                    >
+                      ⚠ changed since sent
+                    </span>
+                  )}
                 </div>
-                {showFinal ? (
-                  <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: '0.4rem', whiteSpace: 'nowrap' }}>
-                    <span style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', textDecoration: 'line-through' }}>{money(dayTotal)}</span>
-                    <span style={{ fontSize: '1.15rem', fontWeight: 800 }}>{finalStr}</span>
-                  </span>
-                ) : (
-                  <span style={{ fontSize: '1.15rem', fontWeight: 800 }}>{money(dayTotal)}</span>
-                )}
+                <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  {showFinal ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: '0.4rem' }}>
+                      <span style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', textDecoration: 'line-through' }}>{money(dayTotal)}</span>
+                      <span style={{ fontSize: '1.15rem', fontWeight: 800 }}>{finalStr}</span>
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '1.15rem', fontWeight: 800 }}>{money(dayTotal)}</span>
+                  )}
+                  {drifted && (
+                    <div className="drift-sent">sent {money(sentTotal!)}</div>
+                  )}
+                </div>
               </div>
 
               {collapsed ? (
