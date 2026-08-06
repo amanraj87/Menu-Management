@@ -43,6 +43,8 @@ function sanitizeQty(v: string): string {
 type PersonShare = { userId: string; userName: string; quantity: number };
 type Row = { menuItemId: string; name: string; unit: string; qty: number; unitPrice: number; amount: number; personBreakdown: PersonShare[] };
 type AggInfo = { name: string; unit: string; qty: number; personBreakdown: PersonShare[] };
+/** A confirmed order as last sent to the vendor (raw; priced at render time). */
+type SentOrder = { date: string; mealType: string; items: { menuItemId: string; quantity: number }[] };
 
 /** Collapsible "who chose this" list, grouped by quantity (same qty on one line). */
 function WhoChose({ breakdown }: { breakdown: PersonShare[] }) {
@@ -77,8 +79,10 @@ export function AdminWeekScreen() {
   const [wkStart, setWkStart] = useState(() => getWeekStart(todayISO()));
   // Live combined user selections keyed by `${date}|${meal}` → (menuItemId → info).
   const [aggByKey, setAggByKey] = useState<Record<string, Record<string, AggInfo>>>({});
-  // What was last SENT to the vendor: date → meal → subtotal.
-  const [sentByDate, setSentByDate] = useState<Record<string, Record<string, number>>>({});
+  // Raw confirmed orders last SENT to the vendor. Kept unpriced on purpose:
+  // prices arrive with the menu query, so the subtotals are derived in a memo
+  // below and recompute once it lands (see sentByDate).
+  const [sentOrders, setSentOrders] = useState<SentOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -153,6 +157,25 @@ export function AdminWeekScreen() {
     menu.items.forEach(i => m.set(i._id, i.pricePerUnit ?? 0));
     return m;
   }, [menu.items]);
+
+  // Price the sent orders here rather than at fetch time: the menu (and so
+  // priceMap) resolves independently, and pricing during load produced ₹0
+  // subtotals whenever the fetch won that race.
+  const sentByDate = useMemo(() => {
+    const map: Record<string, Record<string, number>> = {};
+    // No prices yet → report "nothing sent" rather than ₹0, so the drift
+    // warning can't flash before the menu resolves.
+    if (priceMap.size === 0) return map;
+    for (const o of sentOrders) {
+      if (!map[o.date]) map[o.date] = {};
+      let sum = 0;
+      for (const it of o.items ?? []) {
+        sum += (priceMap.get(it.menuItemId) ?? 0) * it.quantity;
+      }
+      map[o.date][o.mealType] = (map[o.date][o.mealType] ?? 0) + sum;
+    }
+    return map;
+  }, [sentOrders, priceMap]);
 
   const menuById = useMemo(() => {
     const m = new Map<string, { name: string; unit: string }>();
@@ -347,29 +370,17 @@ export function AdminWeekScreen() {
       setAggByKey(agg);
 
       // What the vendor was actually sent, so we can flag drift since the send.
-      const sentRes = await gqlRequest<{ confirmedOrdersForRange: any[] }>(
+      // Stored raw — pricing happens in the sentByDate memo.
+      const sentRes = await gqlRequest<{ confirmedOrdersForRange: SentOrder[] }>(
         CONFIRMED_ORDERS_FOR_RANGE,
         { startDate: wkStart, endDate: wkEnd },
       );
-      const sent: Record<string, Record<string, number>> = {};
-      (sentRes.confirmedOrdersForRange ?? []).forEach((o: any) => {
-        const key = o.date as string;
-        if (!sent[key]) sent[key] = {};
-        let sum = 0;
-        (o.items ?? []).forEach((it: any) => {
-          sum += (priceMap.get(it.menuItemId) ?? 0) * it.quantity;
-        });
-        sent[key][o.mealType] = (sent[key][o.mealType] ?? 0) + sum;
-      });
-      setSentByDate(sent);
+      setSentOrders(sentRes.confirmedOrdersForRange ?? []);
     } catch (e) {
       toast.show(`Failed to load week: ${(e as Error).message}`, 'error');
     } finally {
       setLoading(false);
     }
-    // priceMap is derived from the menu query; including it would refetch on
-    // every menu change, and stale prices self-correct on the next load.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wkStart, wkEnd, toast]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
