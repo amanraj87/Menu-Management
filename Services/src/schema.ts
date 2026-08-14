@@ -107,6 +107,26 @@ export const typeDefs = `#graphql
     updatedAt: String
   }
 
+  """How one dish changed between two versions of a sent order."""
+  type OrderChange {
+    menuItemId: ID!
+    name: String!
+    unit: String!
+    """One of: added, removed, changed."""
+    kind: String!
+    oldQuantity: Float
+    newQuantity: Float
+  }
+
+  """An item-level record of a change made to an order the vendor already had."""
+  type OrderRevision {
+    id: ID!
+    date: String!
+    mealType: MealType!
+    changedAt: String!
+    changes: [OrderChange!]!
+  }
+
   """One day's contribution to what the vendor is owed."""
   type VendorDueDay {
     date: String!
@@ -241,6 +261,8 @@ export const typeDefs = `#graphql
     aggregatedOrder(date: String!, mealType: MealType!): AggregatedOrder!
     """Aggregated live user selections for a date range (inclusive), grouped by date+meal."""
     aggregatedOrdersForRange(startDate: String!, endDate: String!): [AggregatedOrder!]!
+    """Vendor/admin: item-level order changes in a date range, newest first."""
+    orderRevisionsForRange(startDate: String!, endDate: String!): [OrderRevision!]!
     confirmedOrders(date: String!): [ConfirmedOrder!]!
     """Confirmed orders for a date range (inclusive)."""
     confirmedOrdersForRange(startDate: String!, endDate: String!): [ConfirmedOrder!]!

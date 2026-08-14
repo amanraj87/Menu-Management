@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { useConfirmedOrdersForRange, useMenuItems, useSettings, useMealCancellationsForRange, useVendorDayNotesForRange, useUpdateVendorDayNote } from '@/shared/graphql/hooks'
+import { useConfirmedOrdersForRange, useMenuItems, useSettings, useMealCancellationsForRange, useVendorDayNotesForRange, useUpdateVendorDayNote, useOrderRevisionsForRange } from '@/shared/graphql/hooks'
+import type { OrderChange } from '@/shared/graphql/hooks'
 import { Card, Loader } from '@/shared/ui'
 import { Link } from 'react-router-dom'
 import { useToastStore } from '@/shared/stores/toastStore'
@@ -61,12 +62,33 @@ function isTodayStr(dateStr: string): boolean {
   return dateStr === toDateString(new Date())
 }
 
+/** Human label for one dish-level change. */
+function changeLabel(c: OrderChange): string {
+  if (c.kind === 'added') return `+ ${c.name} ${c.newQuantity} ${c.unit}`
+  if (c.kind === 'removed') return `− ${c.name} (was ${c.oldQuantity} ${c.unit})`
+  return `${c.name} ${c.oldQuantity} → ${c.newQuantity} ${c.unit}`
+}
+
+const changeColor = (kind: OrderChange['kind']) =>
+  kind === 'added' ? 'var(--color-primary)' : kind === 'removed' ? 'var(--color-danger)' : 'var(--color-warning)'
+
+function timeAgo(iso: string): string {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.round(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+}
+
 export function VendorWeekView() {
   const [weekStart, setWeekStart] = useState(() => getWeekStart(toDateString(new Date())))
   const weekEnd = addDays(weekStart, 6)
   const dates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart])
 
   const { orders, isLoading: ordersLoading, refetch: refetchOrders } = useConfirmedOrdersForRange(weekStart, weekEnd)
+  // What changed since the vendor was last sent this order, per date+meal.
+  const { revisions, refetch: refetchRevisions } = useOrderRevisionsForRange(weekStart, weekEnd)
   const [refreshing, setRefreshing] = useState(false)
   const { items: menuItems, isLoading: menuLoading } = useMenuItems()
   const { settings, isLoading: settingsLoading } = useSettings()
@@ -76,7 +98,7 @@ export function VendorWeekView() {
   const handleRefresh = async () => {
     setRefreshing(true)
     try {
-      await Promise.all([refetchOrders(), refetchCancellations(), refetchNotes()])
+      await Promise.all([refetchOrders(), refetchCancellations(), refetchNotes(), refetchRevisions()])
       toast.add('Refreshed.', 'success')
     } catch (e) {
       toast.add((e as Error).message, 'error')
@@ -383,14 +405,30 @@ export function VendorWeekView() {
                     {MEALS.map(({ id: meal, label, icon }) => {
                       const rows = d.meals[meal]
                       const isCancelled = d.cancelled[meal]
+                      // Newest revision for this meal, if the order was changed
+                      // after it was first sent.
+                      const rev = revisions.find((r) => r.date === d.date && r.mealType === meal)
                       return (
                         <div key={meal} style={{ border: '1px solid var(--color-border)', borderRadius: 10, background: 'var(--color-bg)', overflow: 'hidden', opacity: isCancelled ? 0.6 : 1 }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', padding: '0.55rem 0.75rem', background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
                             <span style={{ fontSize: '0.8125rem', fontWeight: 700, textDecoration: isCancelled ? 'line-through' : 'none' }}>{icon} {label}</span>
-                            {isCancelled && (
+                            {isCancelled ? (
                               <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-danger, #ef4444)' }}>Cancelled</span>
-                            )}
+                            ) : rev ? (
+                              <span className="updated-badge" title={`Changed ${timeAgo(rev.changedAt)}`}>
+                                ● updated {timeAgo(rev.changedAt)}
+                              </span>
+                            ) : null}
                           </div>
+                          {!isCancelled && rev && (
+                            <ul className="change-list">
+                              {rev.changes.map((c) => (
+                                <li key={c.menuItemId + c.kind} style={{ color: changeColor(c.kind) }}>
+                                  {changeLabel(c)}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                           {isCancelled ? (
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', padding: '2rem 0.75rem', minHeight: 140 }}>
                               <span style={{ fontSize: '4rem', lineHeight: 1 }}>👨‍🍳</span>

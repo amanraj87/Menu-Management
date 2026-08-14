@@ -68,6 +68,15 @@ export const REMIND_NOT_EATEN = `
   }
 `;
 
+export const ORDER_REVISIONS_FOR_RANGE = `
+  query OrderRevisionsForRange($startDate: String!, $endDate: String!) {
+    orderRevisionsForRange(startDate: $startDate, endDate: $endDate) {
+      id date mealType changedAt
+      changes { menuItemId name unit kind oldQuantity newQuantity }
+    }
+  }
+`;
+
 export const VENDOR_DUES = `
   query VendorDues($startDate: String!, $endDate: String!) {
     vendorDues(startDate: $startDate, endDate: $endDate) {

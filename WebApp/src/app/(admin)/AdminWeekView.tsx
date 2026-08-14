@@ -290,6 +290,12 @@ export function AdminWeekView() {
     return map
   }, [confirmedOrders, priceByMenuId])
 
+  /** date|meal combos that already have a confirmed order (any amount). */
+  const sentKeys = useMemo(
+    () => new Set(confirmedOrders.map((o) => `${o.date}|${o.mealType}`)),
+    [confirmedOrders]
+  )
+
   /** Day total as last sent to the vendor, or null if nothing was sent for that day. */
   const sentDayTotal = (date: string): number | null => {
     const subs = sentByDate.get(date)
@@ -355,14 +361,21 @@ export function AdminWeekView() {
     setWeekProgress('')
     let confirmed = 0
     let skipped = 0
+    let frozen = 0
     let done = 0
+    const todayLocal = toDateString(new Date())
     try {
       for (const { date: d, meal: m } of combos) {
         const agg = aggByKey.get(`${d}|${m}`)
         const items = agg
           ? Array.from(agg, ([menuItemId, info]) => ({ menuItemId, name: info.name, unit: info.unit, quantity: info.qty }))
           : []
-        if (items.length === 0 || cancelledSet.has(`${d}|${m}`)) {
+        // A past day that was already sent is what the vendor actually
+        // delivered — never overwrite it. (A past day never sent still goes,
+        // so a forgotten week can be recorded.)
+        if (d < todayLocal && sentKeys.has(`${d}|${m}`)) {
+          frozen++
+        } else if (items.length === 0 || cancelledSet.has(`${d}|${m}`)) {
           skipped++
         } else {
           await client.mutate({
@@ -387,10 +400,14 @@ export function AdminWeekView() {
             : { startDate: localToday, endDate: localToday },
         }).catch(() => {})
       }
+      const notes: string[] = []
+      if (frozen > 0) notes.push(`${frozen} already-delivered meal${frozen === 1 ? '' : 's'} left untouched`)
+      if (skipped > 0) notes.push(`${skipped} with no selections`)
+      const suffix = notes.length > 0 ? ` (${notes.join('; ')}).` : ''
       toast.add(
         confirmed > 0
-          ? `Sent ${confirmed} meal${confirmed === 1 ? '' : 's'} to the kitchen.`
-          : 'No selections found for any meal this week.',
+          ? `Sent ${confirmed} meal${confirmed === 1 ? '' : 's'} to the kitchen.${suffix}`
+          : `No new selections to send.${suffix}`,
         confirmed > 0 ? 'success' : 'info'
       )
     } catch (e) {
@@ -420,6 +437,8 @@ export function AdminWeekView() {
   const expenseTillNow = week.reduce((sum, d) => sum + (d.date <= todayStr ? effectiveDayTotal(d) : 0), 0)
 
   // Drift: days already sent to the vendor whose live total no longer matches.
+  // Only today/future days are actionable — a past day was already delivered
+  // against its snapshot and is now frozen, so re-sending can't reconcile it.
   const driftDays = week
     .map((d) => {
       const sent = sentDayTotal(d.date)
@@ -429,6 +448,7 @@ export function AdminWeekView() {
       return { date: d.date, sent, live, delta: live - sent }
     })
     .filter((x): x is { date: string; sent: number; live: number; delta: number } => x !== null)
+    .filter((x) => x.date >= todayStr)
   const sentWeekTotal = week.reduce((sum, d) => sum + (sentDayTotal(d.date) ?? 0), 0)
   const driftTotal = driftDays.reduce((s, x) => s + x.delta, 0)
 
@@ -553,6 +573,11 @@ export function AdminWeekView() {
           const finalStr = finalAmt != null ? money(finalAmt) : ''
           const sentTotal = sentDayTotal(d.date)
           const drifted = sentTotal != null && Math.round(sentTotal) !== Math.round(dayTotal)
+          // Past days are frozen: their difference is a record of what was
+          // delivered, not something to fix, so it reads informationally.
+          const isPastDay = d.date < todayStr
+          const driftedDelivered = drifted && isPastDay
+          const driftedActionable = drifted && !isPastDay
           return (
             <Card key={d.date} className="content-card" style={today ? { borderColor: 'var(--color-primary)' } : undefined}>
               <div
@@ -566,12 +591,20 @@ export function AdminWeekView() {
                   {today && (
                     <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-primary)', background: 'rgba(34,197,94,0.14)', padding: '0.1rem 0.5rem', borderRadius: 999 }}>Today</span>
                   )}
-                  {drifted && (
+                  {driftedActionable && (
                     <span
                       className="drift-tag"
                       title={`Sent to shefs: ${money(sentTotal!)} · now ${money(dayTotal)}`}
                     >
                       ⚠ changed since sent
+                    </span>
+                  )}
+                  {driftedDelivered && (
+                    <span
+                      className="delivered-tag"
+                      title={`Delivered against the order sent: ${money(sentTotal!)}. Selections changed afterwards but this day is locked.`}
+                    >
+                      delivered as sent
                     </span>
                   )}
                 </div>
@@ -584,8 +617,11 @@ export function AdminWeekView() {
                   ) : (
                     <span style={{ fontSize: '1.15rem', fontWeight: 800 }}>{money(dayTotal)}</span>
                   )}
-                  {drifted && (
+                  {driftedActionable && (
                     <div className="drift-sent">sent {money(sentTotal!)}</div>
+                  )}
+                  {driftedDelivered && (
+                    <div className="delivered-sent">delivered {money(sentTotal!)}</div>
                   )}
                 </div>
               </div>

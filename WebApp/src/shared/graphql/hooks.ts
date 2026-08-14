@@ -12,6 +12,7 @@ import {
   DELETE_MENU_ITEM,
   SET_MENU_ITEM_OFFERED_DAYS,
   VENDOR_DUES,
+  ORDER_REVISIONS_FOR_RANGE,
   MY_SELECTION,
   MY_SELECTIONS_FOR_WEEK,
   PUT_SELECTION,
@@ -127,6 +128,30 @@ export function useMenuItems(mealType?: MealType) {
   })
   const items = (data?.menuItems ?? []).map(toMenuItem)
   return { items, isLoading: loading, error }
+}
+
+export interface OrderChange {
+  menuItemId: string
+  name: string
+  unit: string
+  kind: 'added' | 'removed' | 'changed'
+  oldQuantity: number | null
+  newQuantity: number | null
+}
+export interface OrderRevision {
+  id: string
+  date: string
+  mealType: MealType
+  changedAt: string
+  changes: OrderChange[]
+}
+/** Item-level order changes for a range, newest first (vendor "what changed"). */
+export function useOrderRevisionsForRange(startDate: string, endDate: string) {
+  const { data, loading, error, refetch } = useQuery<{ orderRevisionsForRange: OrderRevision[] }>(
+    ORDER_REVISIONS_FOR_RANGE,
+    { variables: { startDate, endDate }, skip: !startDate || !endDate }
+  )
+  return { revisions: data?.orderRevisionsForRange ?? [], isLoading: loading, error, refetch }
 }
 
 export interface VendorDueDay {

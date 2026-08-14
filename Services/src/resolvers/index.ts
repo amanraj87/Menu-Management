@@ -29,6 +29,7 @@ export const resolvers = {
     aggregatedOrdersForRange: orders.aggregatedOrdersForRange,
     confirmedOrders: orders.confirmedOrders,
     confirmedOrdersForRange: orders.confirmedOrdersForRange,
+    orderRevisionsForRange: orders.orderRevisionsForRange,
     getSettings: settings.getSettings,
     weeklyExpense: selections.weeklyExpense,
     vendorDues: vendorDuesResolvers.vendorDues,

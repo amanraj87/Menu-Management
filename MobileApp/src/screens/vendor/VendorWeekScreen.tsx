@@ -11,7 +11,8 @@ import { Button, Card, Loader } from '../../ui';
 import { SignOutButton } from '../../ui/SignOutButton';
 import { gqlRequest } from '../../api/client';
 import { CONFIRMED_ORDERS_FOR_RANGE, UPDATE_VENDOR_DAY_NOTE } from '../../api/operations';
-import { useMenuItems, useSettings, useMealCancellationsForRange, useVendorDayNotesForRange } from '../../api/hooks';
+import { useMenuItems, useSettings, useMealCancellationsForRange, useVendorDayNotesForRange, useOrderRevisionsForRange } from '../../api/hooks';
+import type { OrderChange } from '../../api/hooks';
 import { useToast } from '../../context/ToastContext';
 import { colors, font, mealMeta, radius, spacing } from '../../theme';
 import { addDays, formatShort, isToday, todayISO, weekStart as getWeekStart } from '../../utils/date';
@@ -25,6 +26,25 @@ function dayName(iso: string): string {
 }
 
 type Row = { name: string; unit: string; qty: number; unitPrice: number; amount: number };
+
+/** Human label for one dish-level change. */
+function changeLabel(c: OrderChange): string {
+  if (c.kind === 'added') return `+ ${c.name} ${c.newQuantity} ${c.unit}`;
+  if (c.kind === 'removed') return `− ${c.name} (was ${c.oldQuantity} ${c.unit})`;
+  return `${c.name} ${c.oldQuantity} → ${c.newQuantity} ${c.unit}`;
+}
+
+const changeColor = (kind: OrderChange['kind']) =>
+  kind === 'added' ? colors.primary : kind === 'removed' ? colors.danger : colors.warning;
+
+function timeAgo(iso: string): string {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return formatShort(iso.slice(0, 10));
+}
 
 export function VendorWeekScreen() {
   const toast = useToast();
@@ -56,6 +76,8 @@ export function VendorWeekScreen() {
   }, [cancellations]);
 
   const { notes, refetch: refetchNotes } = useVendorDayNotesForRange(wkStart, wkEnd);
+  // What changed since the vendor was last sent these orders, per date+meal.
+  const { revisions, refetch: refetchRevisions } = useOrderRevisionsForRange(wkStart, wkEnd);
   const notesByDate = useMemo(() => {
     const map: Record<string, { finalAmount: number | null; comment: string; adminComment: string }> = {};
     notes.forEach(n => { map[n.date] = { finalAmount: n.finalAmount, comment: n.comment, adminComment: n.adminComment }; });
@@ -112,12 +134,13 @@ export function VendorWeekScreen() {
         (map[o.date] = map[o.date] ?? []).push(order);
       });
       setOrdersByDate(map);
+      await refetchRevisions();
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }, [wkStart, wkEnd]);
+  }, [wkStart, wkEnd, refetchRevisions]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -279,16 +302,31 @@ export function VendorWeekScreen() {
                   {MEAL_TYPES.map(meal => {
                     const rows = meals[meal];
                     const isCancelled = cancelled[meal];
+                    // Newest revision for this meal (order changed after being sent).
+                    const rev = revisions.find(r => r.date === date && r.mealType === meal);
                     return (
                       <View key={meal} style={[styles.mealGroup, isCancelled && styles.mealGroupCancelled]}>
                         <View style={styles.mealHeadRow}>
                           <Text style={[styles.mealLabel, isCancelled && styles.mealLabelCancelled]}>
                             {mealMeta[meal].icon} {mealMeta[meal].label}
                           </Text>
-                          {isCancelled && (
+                          {isCancelled ? (
                             <Text style={styles.cancelledLabel}>Cancelled</Text>
-                          )}
+                          ) : rev ? (
+                            <Text style={styles.updatedBadge}>● updated {timeAgo(rev.changedAt)}</Text>
+                          ) : null}
                         </View>
+                        {!isCancelled && rev && (
+                          <View style={styles.changeList}>
+                            {rev.changes.map(c => (
+                              <Text
+                                key={c.menuItemId + c.kind}
+                                style={[styles.changeText, { color: changeColor(c.kind) }]}>
+                                {changeLabel(c)}
+                              </Text>
+                            ))}
+                          </View>
+                        )}
                         {isCancelled ? (
                           <View style={styles.cancelledCard}>
                             <Text style={styles.cancelledEmoji}>👨‍🍳</Text>
@@ -446,6 +484,20 @@ const styles = StyleSheet.create({
   mealHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
   mealLabel: { color: colors.textMuted, fontSize: font.small, fontWeight: '700' },
   mealLabelCancelled: { textDecorationLine: 'line-through' },
+  updatedBadge: {
+    color: colors.warning,
+    fontSize: font.tiny,
+    fontWeight: '700',
+  },
+  changeList: {
+    backgroundColor: 'rgba(245,158,11,0.09)',
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
+    gap: 2,
+  },
+  changeText: { fontSize: font.tiny, fontWeight: '600' },
   cancelledLabel: { color: colors.danger, fontSize: font.tiny, fontWeight: '700' },
   cancelledCard: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl, gap: spacing.sm },
   cancelledEmoji: { fontSize: 56, lineHeight: 64 },

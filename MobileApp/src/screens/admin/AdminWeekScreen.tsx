@@ -177,6 +177,12 @@ export function AdminWeekScreen() {
     return map;
   }, [sentOrders, priceMap]);
 
+  /** date|meal combos that already have a confirmed order (any amount). */
+  const sentKeys = useMemo(
+    () => new Set(sentOrders.map(o => `${o.date}|${o.mealType}`)),
+    [sentOrders],
+  );
+
   const menuById = useMemo(() => {
     const m = new Map<string, { name: string; unit: string }>();
     menu.items.forEach(i => m.set(i._id, { name: i.name, unit: i.unit ?? '' }));
@@ -311,14 +317,21 @@ export function AdminWeekScreen() {
     setWeekProgress('');
     let confirmed = 0;
     let skipped = 0;
+    let frozen = 0;
     let done = 0;
+    const todayLocal = todayISO();
     try {
       for (const { date: d, meal: m } of combos) {
         const agg = aggByKey[`${d}|${m}`];
         const items = agg
           ? Object.entries(agg).map(([menuItemId, info]) => ({ menuItemId, name: info.name, unit: info.unit, quantity: info.qty }))
           : [];
-        if (items.length === 0 || cancelledSet.has(`${d}|${m}`)) {
+        // A past day that was already sent is what the vendor actually
+        // delivered — never overwrite it. (A past day never sent still goes,
+        // so a forgotten week can be recorded.)
+        if (d < todayLocal && sentKeys.has(`${d}|${m}`)) {
+          frozen++;
+        } else if (items.length === 0 || cancelledSet.has(`${d}|${m}`)) {
           skipped++;
         } else {
           await gqlRequest(CONFIRM_ORDER_WITH_ITEMS, { date: d, mealType: m, items });
@@ -338,10 +351,14 @@ export function AdminWeekScreen() {
           endDate: isWeekend ? days[days.length - 1] : localToday,
         }).catch(() => {});
       }
+      const notes: string[] = [];
+      if (frozen > 0) notes.push(`${frozen} already-delivered meal${frozen === 1 ? '' : 's'} left untouched`);
+      if (skipped > 0) notes.push(`${skipped} with no selections`);
+      const suffix = notes.length > 0 ? ` (${notes.join('; ')}).` : '';
       toast.show(
         confirmed > 0
-          ? `Sent ${confirmed} meal${confirmed === 1 ? '' : 's'} to the kitchen.`
-          : 'No selections found for any meal this week.',
+          ? `Sent ${confirmed} meal${confirmed === 1 ? '' : 's'} to the kitchen.${suffix}`
+          : `No new selections to send.${suffix}`,
         confirmed > 0 ? 'success' : 'info',
       );
     } catch (e) {
@@ -441,7 +458,9 @@ export function AdminWeekScreen() {
     return sum + ((finalAmt != null && Math.round(finalAmt) !== Math.round(computed)) ? finalAmt : computed);
   }, 0);
 
-  // Drift: days already sent whose live total no longer matches what the vendor has.
+  // Drift: days already sent whose live total no longer matches what the vendor
+  // has. Only today/future days are actionable — a past day was delivered
+  // against its snapshot and is frozen, so re-sending can't reconcile it.
   const driftDays = days
     .map(date => {
       const sent = sentDayTotal(date);
@@ -451,7 +470,8 @@ export function AdminWeekScreen() {
       if (Math.round(sent) === Math.round(live)) return null;
       return { date, delta: live - sent };
     })
-    .filter((x): x is { date: string; delta: number } => x !== null);
+    .filter((x): x is { date: string; delta: number } => x !== null)
+    .filter(x => x.date >= today);
   const sentWeekTotal = days.reduce((sum, date) => sum + (sentDayTotal(date) ?? 0), 0);
   const driftTotal = driftDays.reduce((s, x) => s + x.delta, 0);
 
@@ -626,6 +646,10 @@ export function AdminWeekScreen() {
           const showFinal = finalAmt != null && Math.round(finalAmt) !== Math.round(dayTotal);
           const sentTotal = sentDayTotal(date);
           const drifted = sentTotal != null && Math.round(sentTotal) !== Math.round(dayTotal);
+          // Past days are frozen: their difference records what was delivered
+          // rather than something to fix, so it reads informationally.
+          const driftedDelivered = drifted && date < today;
+          const driftedActionable = drifted && date >= today;
 
           return (
             <Card key={date} padded={false}>
@@ -634,7 +658,8 @@ export function AdminWeekScreen() {
                   <Text style={[styles.chevron, collapsed && styles.chevronCollapsed]}>▾</Text>
                   <Text style={styles.dayTitle}>{dayName(date)} · {formatShort(date)}</Text>
                   {isToday(date) && <Text style={styles.todayBadge}>Today</Text>}
-                  {drifted && <Text style={styles.driftTag}>⚠ changed</Text>}
+                  {driftedActionable && <Text style={styles.driftTag}>⚠ changed</Text>}
+                  {driftedDelivered && <Text style={styles.deliveredTag}>delivered as sent</Text>}
                 </View>
                 <View style={styles.amountCol}>
                   {showFinal ? (
@@ -645,7 +670,10 @@ export function AdminWeekScreen() {
                   ) : (
                     <Text style={styles.dayAmount}>₹{Math.round(dayTotal)}</Text>
                   )}
-                  {drifted && <Text style={styles.driftSent}>sent ₹{Math.round(sentTotal!)}</Text>}
+                  {driftedActionable && <Text style={styles.driftSent}>sent ₹{Math.round(sentTotal!)}</Text>}
+                  {driftedDelivered && (
+                    <Text style={styles.deliveredSent}>delivered ₹{Math.round(sentTotal!)}</Text>
+                  )}
                 </View>
               </Pressable>
 
@@ -857,6 +885,8 @@ const styles = StyleSheet.create({
   driftBannerText: { color: colors.warning, fontSize: font.small, lineHeight: 19 },
   driftTag: { color: colors.warning, fontSize: font.tiny, fontWeight: '700' },
   driftSent: { color: colors.warning, fontSize: font.tiny, marginTop: 1, textAlign: 'right' },
+  deliveredTag: { color: colors.textMuted, fontSize: font.tiny, fontWeight: '600' },
+  deliveredSent: { color: colors.textMuted, fontSize: font.tiny, marginTop: 1, textAlign: 'right' },
   amountCol: { alignItems: 'flex-end' },
   bellBtn: { padding: 2 },
   bellIcon: { fontSize: 20 },

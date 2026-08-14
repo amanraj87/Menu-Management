@@ -12,6 +12,8 @@ import type {
   ConfirmedOrderItemDoc,
   PersonBreakdownDoc,
   UserDoc,
+  OrderChangeDoc,
+  OrderRevisionDoc,
 } from '../types.js'
 
 export async function aggregatedOrder(
@@ -169,6 +171,128 @@ export async function aggregatedOrdersForRange(
   return result
 }
 
+/** Today's date (UTC) as YYYY-MM-DD. */
+function todayUTC(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+type NewItem = { menuItemId: string; name: string; unit: string; quantity: number }
+
+/**
+ * Item-level difference between the order the vendor already has and the one
+ * replacing it. Returns [] when nothing meaningful changed.
+ */
+function diffOrderItems(
+  oldItems: ConfirmedOrderItemDoc[],
+  newItems: NewItem[],
+): OrderChangeDoc[] {
+  const oldById = new Map(oldItems.map((i) => [i.menuItemId.toString(), i]))
+  const newById = new Map(newItems.map((i) => [i.menuItemId, i]))
+  const changes: OrderChangeDoc[] = []
+
+  for (const n of newItems) {
+    const prev = oldById.get(n.menuItemId)
+    if (!prev) {
+      changes.push({
+        menuItemId: new ObjectId(n.menuItemId),
+        name: n.name,
+        unit: n.unit,
+        kind: 'added',
+        oldQuantity: null,
+        newQuantity: n.quantity,
+      })
+    } else if (prev.quantity !== n.quantity) {
+      changes.push({
+        menuItemId: new ObjectId(n.menuItemId),
+        name: n.name,
+        unit: n.unit,
+        kind: 'changed',
+        oldQuantity: prev.quantity,
+        newQuantity: n.quantity,
+      })
+    }
+  }
+  for (const o of oldItems) {
+    if (!newById.has(o.menuItemId.toString())) {
+      changes.push({
+        menuItemId: o.menuItemId,
+        name: o.name,
+        unit: o.unit,
+        kind: 'removed',
+        oldQuantity: o.quantity,
+        newQuantity: null,
+      })
+    }
+  }
+  return changes
+}
+
+/**
+ * Record what changed about an already-sent order. No-op on a first-ever send:
+ * a brand-new week is entirely "added", which is noise rather than a change the
+ * vendor needs flagged.
+ */
+async function recordOrderRevision(
+  date: string,
+  mealType: MealType,
+  existing: ConfirmedOrderDoc | null,
+  newItems: NewItem[],
+  changedBy: string,
+): Promise<OrderChangeDoc[]> {
+  if (!existing) return []
+  const changes = diffOrderItems(existing.items ?? [], newItems)
+  if (changes.length === 0) return []
+  await getDb().collection(COLLECTIONS.order_revisions).insertOne({
+    date,
+    mealType,
+    changes,
+    changedBy: new ObjectId(changedBy),
+    changedAt: new Date(),
+  })
+  return changes
+}
+
+/** Compact human summary of a diff, e.g. "Pulka 4→6, +Kadai Chicken, −Curd". */
+export function summariseChanges(changes: OrderChangeDoc[], max = 3): string {
+  const parts = changes.map((c) => {
+    if (c.kind === 'added') return `+${c.name}`
+    if (c.kind === 'removed') return `−${c.name}`
+    return `${c.name} ${c.oldQuantity}→${c.newQuantity}`
+  })
+  if (parts.length <= max) return parts.join(', ')
+  return `${parts.slice(0, max).join(', ')} +${parts.length - max} more`
+}
+
+/**
+ * Refuse to rewrite a day that has already been delivered.
+ *
+ * A user can cancel an upcoming meal that the admin never forwards; once that
+ * day passes, the vendor has already cooked the original order. Re-sending the
+ * week later would overwrite that snapshot with the reduced live figure, which
+ * both loses the record of what was supplied and *understates* Vendor dues
+ * (dues is computed from confirmed_orders).
+ *
+ * A past day with nothing confirmed yet is still allowed through: there is no
+ * snapshot to destroy, and recording it makes dues correct for a week that was
+ * never sent.
+ *
+ * Note: "past" is judged in UTC while clients judge it locally. For timezones
+ * ahead of UTC (e.g. IST) the server's past is a subset of the client's, so this
+ * never blocks a send the client considers legitimate — the client-side skip is
+ * the primary guard and this is the backstop.
+ */
+async function assertNotRewritingDeliveredDay(date: string, mealType: MealType): Promise<void> {
+  if (date >= todayUTC()) return
+  const existing = await getDb()
+    .collection(COLLECTIONS.confirmed_orders)
+    .findOne({ date, mealType })
+  if (existing) {
+    throw new Error(
+      `${date} has already passed and its ${mealType} was already sent to the vendor, so it can't be changed. Use the vendor's final amount to correct a delivered day.`
+    )
+  }
+}
+
 export async function confirmOrder(
   _: unknown,
   args: { date: string; mealType: MealType },
@@ -176,6 +300,7 @@ export async function confirmOrder(
 ): Promise<Record<string, unknown>> {
   const user = context.user
   if (!user || user.role !== 'admin') throw new Error('Unauthorized: admin role required to confirm order')
+  await assertNotRewritingDeliveredDay(args.date, args.mealType)
 
   const db = getDb()
   const agg = await aggregatedOrder(_, args) as { date: string; mealType: MealType; items: { menuItemId: string; name: string; unit: string; quantity: number; personBreakdown: { userId: string; userName: string; quantity: number }[] }[] }
@@ -191,6 +316,11 @@ export async function confirmOrder(
     })) as PersonBreakdownDoc[],
   }))
 
+  // Read the version the vendor currently has so the change can be logged.
+  const existingForRevision = await db.collection(COLLECTIONS.confirmed_orders).findOne(
+    { date: args.date, mealType: args.mealType }
+  ) as ConfirmedOrderDoc | null
+
   const doc: Omit<ConfirmedOrderDoc, '_id'> = {
     date: args.date,
     mealType: args.mealType as MealType,
@@ -204,6 +334,14 @@ export async function confirmOrder(
     { returnDocument: 'after', upsert: true }
   ) as ConfirmedOrderDoc | null
   if (!result) throw new Error('Failed to save confirmed order')
+
+  await recordOrderRevision(
+    args.date,
+    args.mealType,
+    existingForRevision,
+    agg.items.map((i) => ({ menuItemId: i.menuItemId, name: i.name, unit: i.unit, quantity: i.quantity })),
+    user.userId,
+  )
 
   return {
     id: result._id.toString(),
@@ -236,6 +374,7 @@ export async function confirmOrderWithItems(
 ): Promise<Record<string, unknown>> {
   const user = context.user
   if (!user || user.role !== 'admin') throw new Error('Unauthorized: admin role required to confirm order')
+  await assertNotRewritingDeliveredDay(args.date, args.mealType)
 
   for (const i of args.items) {
     if (!Number.isFinite(i.quantity) || i.quantity <= 0) {
@@ -285,6 +424,8 @@ export async function confirmOrderWithItems(
     { returnDocument: 'after', upsert: true }
   ) as ConfirmedOrderDoc | null
   if (!result) throw new Error('Failed to save confirmed order')
+
+  await recordOrderRevision(args.date, args.mealType, existingDoc, args.items, user.userId)
 
   return {
     id: result._id.toString(),
@@ -363,14 +504,54 @@ export async function resendMealToVendor(
   const label = args.mealType.charAt(0).toUpperCase() + args.mealType.slice(1)
   const vendors = await userIdsByRole('vendor')
   if (vendors.length > 0) {
+    // Tell the vendor exactly what moved — confirmOrder just logged the diff.
+    const latest = (await getDb()
+      .collection(COLLECTIONS.order_revisions)
+      .find({ date: args.date, mealType: args.mealType })
+      .sort({ changedAt: -1 })
+      .limit(1)
+      .next()) as OrderRevisionDoc | null
+    const summary = latest ? summariseChanges(latest.changes) : ''
     await sendToUsers(
       vendors,
-      'Orders updated',
-      `${label} orders for ${args.date} have been updated. Open the week to view them.`,
-      { type: 'ordersSent' },
+      `${label} updated for ${args.date}`,
+      summary || `${label} orders for ${args.date} have been updated. Open the week to view them.`,
+      { type: 'ordersSent', date: args.date, mealType: args.mealType },
     )
   }
   return itemCount
+}
+
+/** Vendor/admin: item-level order changes in a date range, newest first. */
+export async function orderRevisionsForRange(
+  _: unknown,
+  args: { startDate: string; endDate: string },
+  context: { user?: ContextUser }
+): Promise<Record<string, unknown>[]> {
+  const user = context.user
+  if (!user || (user.role !== 'vendor' && user.role !== 'admin')) {
+    throw new Error('Unauthorized: vendor or admin role required')
+  }
+  const docs = (await getDb()
+    .collection(COLLECTIONS.order_revisions)
+    .find({ date: { $gte: args.startDate, $lte: args.endDate } })
+    .sort({ changedAt: -1 })
+    .limit(500)
+    .toArray()) as OrderRevisionDoc[]
+  return docs.map((d) => ({
+    id: d._id.toString(),
+    date: d.date,
+    mealType: d.mealType,
+    changedAt: d.changedAt.toISOString(),
+    changes: d.changes.map((c) => ({
+      menuItemId: c.menuItemId.toString(),
+      name: c.name,
+      unit: c.unit,
+      kind: c.kind,
+      oldQuantity: c.oldQuantity,
+      newQuantity: c.newQuantity,
+    })),
+  }))
 }
 
 /**
@@ -388,12 +569,33 @@ export async function notifyOrdersSentToVendor(
   const vendors = await userIdsByRole('vendor')
   if (vendors.length === 0) return 0
   const range = args.startDate === args.endDate ? args.startDate : `${args.startDate} – ${args.endDate}`
-  await sendToUsers(
-    vendors,
-    'Orders updated',
-    `Orders for ${range} have been updated. Open the week to view them.`,
-    { type: 'ordersSent' },
-  )
+
+  // Summarise what this send actually changed. The window covers the confirm
+  // loop that just ran (a send takes seconds); worst case it also mentions a
+  // change from a few minutes earlier, which the vendor wants to know anyway.
+  const since = new Date(Date.now() - 10 * 60 * 1000)
+  const recent = (await getDb()
+    .collection(COLLECTIONS.order_revisions)
+    .find({ date: { $gte: args.startDate, $lte: args.endDate }, changedAt: { $gte: since } })
+    .sort({ changedAt: -1 })
+    .toArray()) as OrderRevisionDoc[]
+
+  let body: string
+  if (recent.length === 1) {
+    const r = recent[0]
+    const label = r.mealType.charAt(0).toUpperCase() + r.mealType.slice(1)
+    body = `${label} ${r.date}: ${summariseChanges(r.changes)}`
+  } else if (recent.length > 1) {
+    const where = recent
+      .slice(0, 3)
+      .map((r) => `${r.date} ${r.mealType}`)
+      .join(', ')
+    body = `${recent.length} meals changed — ${where}${recent.length > 3 ? '…' : ''}. Open the week for details.`
+  } else {
+    body = `Orders for ${range} have been updated. Open the week to view them.`
+  }
+
+  await sendToUsers(vendors, 'Orders updated', body, { type: 'ordersSent' })
   return vendors.length
 }
 

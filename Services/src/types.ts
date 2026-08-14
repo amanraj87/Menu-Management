@@ -54,6 +54,30 @@ export interface ConfirmedOrderDoc {
   confirmedAt: Date
 }
 
+/** One item-level difference between two versions of a confirmed order. */
+export interface OrderChangeDoc {
+  menuItemId: ObjectId
+  name: string
+  unit: string
+  kind: 'added' | 'removed' | 'changed'
+  oldQuantity: number | null
+  newQuantity: number | null
+}
+
+/**
+ * An audit entry recorded whenever an already-sent order is changed, so the
+ * vendor can see WHAT changed instead of re-reading the whole menu.
+ * Only written when a previous version existed and the items actually differ.
+ */
+export interface OrderRevisionDoc {
+  _id: ObjectId
+  date: string
+  mealType: MealType
+  changes: OrderChangeDoc[]
+  changedBy: ObjectId
+  changedAt: Date
+}
+
 export interface UserDoc {
   _id: ObjectId
   name: string

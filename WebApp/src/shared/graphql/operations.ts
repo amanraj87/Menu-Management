@@ -270,6 +270,18 @@ export const REMIND_NOT_EATEN = gql`
   }
 `
 
+export const ORDER_REVISIONS_FOR_RANGE = gql`
+  query OrderRevisionsForRange($startDate: String!, $endDate: String!) {
+    orderRevisionsForRange(startDate: $startDate, endDate: $endDate) {
+      id
+      date
+      mealType
+      changedAt
+      changes { menuItemId name unit kind oldQuantity newQuantity }
+    }
+  }
+`
+
 export const VENDOR_DUES = gql`
   query VendorDues($startDate: String!, $endDate: String!) {
     vendorDues(startDate: $startDate, endDate: $endDate) {

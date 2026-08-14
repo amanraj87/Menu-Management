@@ -19,6 +19,7 @@ import {
   VENDOR_DAY_NOTES_FOR_RANGE,
   PRICE_HISTORY,
   VENDOR_DUES,
+  ORDER_REVISIONS_FOR_RANGE,
 } from './operations';
 import type {
   AggregatedOrder,
@@ -343,6 +344,31 @@ export interface PriceHistoryEntry {
   oldPrice: number | null;
   newPrice: number | null;
   changedAt: string;
+}
+
+export interface OrderChange {
+  menuItemId: string;
+  name: string;
+  unit: string;
+  kind: 'added' | 'removed' | 'changed';
+  oldQuantity: number | null;
+  newQuantity: number | null;
+}
+export interface OrderRevision {
+  id: string;
+  date: string;
+  mealType: MealType;
+  changedAt: string;
+  changes: OrderChange[];
+}
+/** Item-level order changes for a range, newest first (vendor "what changed"). */
+export function useOrderRevisionsForRange(startDate: string, endDate: string) {
+  const q = useGqlQuery<{ orderRevisionsForRange: OrderRevision[] }>(
+    ORDER_REVISIONS_FOR_RANGE,
+    { startDate, endDate },
+    { skip: !startDate || !endDate },
+  );
+  return { revisions: q.data?.orderRevisionsForRange ?? [], ...q };
 }
 
 export interface VendorDueDay {
